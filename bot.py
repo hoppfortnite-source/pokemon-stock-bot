@@ -1,20 +1,21 @@
 import discord
-from discord.ext import tasks
+from discord.ext import commands, tasks
 import aiohttp
 import os
 
-bot = discord.Bot()
-FORT_MYERS_ZIP = "33901"
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 async def check_store(session, name, url):
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
         async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as r:
             if r.status == 200:
-                return f"✅ **{name}** — Site reachable, check link below"
+                return f"✅ **{name}** — Site reachable"
             else:
                 return f"⚠️ **{name}** — Status {r.status}"
-    except Exception as e:
+    except:
         return f"❌ **{name}** — Failed to reach"
 
 class StoreSelect(discord.ui.Select):
@@ -31,34 +32,22 @@ class StoreSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
         store = self.values[0]
-
         urls = {
             "walmart": ("Walmart", "https://www.walmart.com/search?q=pokemon+cards"),
             "target": ("Target", "https://www.target.com/s?searchTerm=pokemon+cards"),
             "bestbuy": ("Best Buy", "https://www.bestbuy.com/site/searchpage.jsp?st=pokemon+cards"),
             "gamestop": ("GameStop", "https://www.gamestop.com/search#q=pokemon+cards"),
         }
-
-        to_check = urls.values() if store == "all" else [urls[store]]
-
-        embed = discord.Embed(title="🎴 Pokemon Stock Check — Fort Myers FL", color=0xFFCC00)
+        to_check = list(urls.values()) if store == "all" else [urls[store]]
+        embed = discord.Embed(title="🎴 Pokemon Stock — Fort Myers FL", color=0xFFCC00)
         results = []
         async with aiohttp.ClientSession() as session:
             for name, url in to_check:
                 result = await check_store(session, name, url)
                 results.append(result)
-
         embed.description = "\n".join(results)
-        embed.add_field(
-            name="📦 Products",
-            value="Booster Boxes • ETBs • Booster Bundles • Tins & Collections",
-            inline=False
-        )
-        embed.add_field(
-            name="🔗 Quick Links",
-            value="[Walmart](https://www.walmart.com/search?q=pokemon+cards) | [Target](https://www.target.com/s?searchTerm=pokemon+cards) | [Best Buy](https://www.bestbuy.com/site/searchpage.jsp?st=pokemon+cards) | [GameStop](https://www.gamestop.com/search#q=pokemon+cards)",
-            inline=False
-        )
+        embed.add_field(name="📦 Products", value="Booster Boxes • ETBs • Booster Bundles • Tins & Collections", inline=False)
+        embed.add_field(name="🔗 Quick Links", value="[Walmart](https://www.walmart.com/search?q=pokemon+cards) | [Target](https://www.target.com/s?searchTerm=pokemon+cards) | [Best Buy](https://www.bestbuy.com/site/searchpage.jsp?st=pokemon+cards) | [GameStop](https://www.gamestop.com/search#q=pokemon+cards)", inline=False)
         await interaction.followup.send(embed=embed)
 
 class StoreView(discord.ui.View):
@@ -66,18 +55,14 @@ class StoreView(discord.ui.View):
         super().__init__()
         self.add_item(StoreSelect())
 
-@bot.slash_command(name="pokemon", description="Check Pokemon stock at Fort Myers stores")
-async def pokemon(ctx):
-    embed = discord.Embed(
-        title="🎴 Pokemon Stock Checker",
-        description="Select a store to check Pokemon card availability in Fort Myers!",
-        color=0xFFCC00
-    )
-    await ctx.respond(embed=embed, view=StoreView())
+@bot.tree.command(name="pokemon", description="Check Pokemon stock at Fort Myers stores")
+async def pokemon(interaction: discord.Interaction):
+    embed = discord.Embed(title="🎴 Pokemon Stock Checker", description="Select a store to check Pokemon card availability in Fort Myers!", color=0xFFCC00)
+    await interaction.response.send_message(embed=embed, view=StoreView())
 
-@bot.slash_command(name="checkall", description="Check all stores at once")
-async def checkall(ctx):
-    await ctx.defer()
+@bot.tree.command(name="checkall", description="Check all stores at once")
+async def checkall(interaction: discord.Interaction):
+    await interaction.response.defer()
     urls = {
         "Walmart": "https://www.walmart.com/search?q=pokemon+cards",
         "Target": "https://www.target.com/s?searchTerm=pokemon+cards",
@@ -91,17 +76,14 @@ async def checkall(ctx):
             result = await check_store(session, name, url)
             results.append(result)
     embed.description = "\n".join(results)
-    embed.add_field(
-        name="🔗 Quick Links",
-        value="[Walmart](https://www.walmart.com/search?q=pokemon+cards) | [Target](https://www.target.com/s?searchTerm=pokemon+cards) | [Best Buy](https://www.bestbuy.com/site/searchpage.jsp?st=pokemon+cards) | [GameStop](https://www.gamestop.com/search#q=pokemon+cards)",
-        inline=False
-    )
-    await ctx.followup.send(embed=embed)
+    embed.add_field(name="🔗 Quick Links", value="[Walmart](https://www.walmart.com/search?q=pokemon+cards) | [Target](https://www.target.com/s?searchTerm=pokemon+cards) | [Best Buy](https://www.bestbuy.com/site/searchpage.jsp?st=pokemon+cards) | [GameStop](https://www.gamestop.com/search#q=pokemon+cards)", inline=False)
+    await interaction.followup.send(embed=embed)
 
 @bot.event
 async def on_ready():
     print(f"Bot ready as {bot.user}")
+    await bot.tree.sync()
+    print("Slash commands synced!")
 
 TOKEN = os.environ.get('DISCORD_TOKEN')
 bot.run(TOKEN)
-
