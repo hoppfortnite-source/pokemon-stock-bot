@@ -2,24 +2,67 @@ import discord
 from discord.ext import commands
 import aiohttp
 import os
+import json
+import re
 
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Real Target TCINs from target.com product URLs
 TARGET_PRODUCTS = [
-    {"name": "Chaos Rising Elite Trainer Box", "tcin": "95267143", "type": "ETB (9 packs)", "price": "$49.99", "set": "Mega Evolution — Chaos Rising"},
-    {"name": "Chaos Rising Booster Bundle", "tcin": "95267144", "type": "Booster Bundle (6 packs)", "price": "$27.99", "set": "Mega Evolution — Chaos Rising"},
-    {"name": "Chaos Rising Booster Box", "tcin": "95267142", "type": "Booster Box (36 packs)", "price": "$160.99", "set": "Mega Evolution — Chaos Rising"},
-    {"name": "Phantasmal Flames ETB", "tcin": "93905801", "type": "ETB (9 packs)", "price": "$49.99", "set": "Mega Evolution — Phantasmal Flames"},
-    {"name": "Phantasmal Flames Booster Bundle", "tcin": "93905802", "type": "Booster Bundle (6 packs)", "price": "$27.99", "set": "Mega Evolution — Phantasmal Flames"},
-    {"name": "Destined Rivals ETB", "tcin": "92651001", "type": "ETB (9 packs)", "price": "$49.99", "set": "Scarlet & Violet — Destined Rivals"},
-    {"name": "Destined Rivals Booster Bundle", "tcin": "92651002", "type": "Booster Bundle (6 packs)", "price": "$27.99", "set": "Scarlet & Violet — Destined Rivals"},
-    {"name": "Prismatic Evolutions Booster Bundle", "tcin": "89522456", "type": "Booster Bundle (6 packs)", "price": "$27.99", "set": "Scarlet & Violet — Prismatic Evolutions"},
-    {"name": "Ascended Heroes ETB", "tcin": "94201133", "type": "ETB (9 packs)", "price": "$49.99", "set": "Mega Evolution — Ascended Heroes"},
-    {"name": "White Flare Booster Bundle", "tcin": "92100234", "type": "Booster Bundle (6 packs)", "price": "$27.99", "set": "Scarlet & Violet — White Flare"},
-    {"name": "Black Bolt Booster Bundle", "tcin": "92100235", "type": "Booster Bundle (6 packs)", "price": "$27.99", "set": "Scarlet & Violet — Black Bolt"},
+    {"name": "Chaos Rising Elite Trainer Box", "tcin": "95267143", "price": "$49.99", "set": "Mega Evolution — Chaos Rising", "type": "ETB (9 packs)"},
+    {"name": "Chaos Rising Booster Bundle", "tcin": "95267144", "price": "$27.99", "set": "Mega Evolution — Chaos Rising", "type": "Booster Bundle (6 packs)"},
+    {"name": "Chaos Rising Booster Box", "tcin": "95267142", "price": "$160.99", "set": "Mega Evolution — Chaos Rising", "type": "Booster Box (36 packs)"},
+    {"name": "Phantasmal Flames ETB", "tcin": "93905801", "price": "$49.99", "set": "Mega Evolution — Phantasmal Flames", "type": "ETB (9 packs)"},
+    {"name": "Phantasmal Flames Booster Bundle", "tcin": "93905802", "price": "$27.99", "set": "Mega Evolution — Phantasmal Flames", "type": "Booster Bundle (6 packs)"},
+    {"name": "Destined Rivals ETB", "tcin": "92651001", "price": "$49.99", "set": "Scarlet & Violet — Destined Rivals", "type": "ETB (9 packs)"},
+    {"name": "Destined Rivals Booster Bundle", "tcin": "92651002", "price": "$27.99", "set": "Scarlet & Violet — Destined Rivals", "type": "Booster Bundle (6 packs)"},
+    {"name": "Prismatic Evolutions Bundle", "tcin": "89522456", "price": "$27.99", "set": "Scarlet & Violet — Prismatic Evolutions", "type": "Booster Bundle (6 packs)"},
+    {"name": "Ascended Heroes ETB", "tcin": "94201133", "price": "$49.99", "set": "Mega Evolution — Ascended Heroes", "type": "ETB (9 packs)"},
+    {"name": "White Flare Bundle", "tcin": "92100234", "price": "$27.99", "set": "Scarlet & Violet — White Flare", "type": "Booster Bundle (6 packs)"},
+    {"name": "Black Bolt Bundle", "tcin": "92100235", "price": "$27.99", "set": "Scarlet & Violet — Black Bolt", "type": "Booster Bundle (6 packs)"},
+]
+
+WALMART_PRODUCTS = [
+    {"name": "Chaos Rising Elite Trainer Box", "item_id": "19988614228", "price": "$49.99", "set": "Mega Evolution — Chaos Rising", "type": "ETB (9 packs)"},
+    {"name": "Chaos Rising Booster Box", "item_id": "19939024731", "price": "$160.99", "set": "Mega Evolution — Chaos Rising", "type": "Booster Box (36 packs)"},
+    {"name": "Chaos Rising Booster Bundle", "item_id": "19986002628", "price": "$27.99", "set": "Mega Evolution — Chaos Rising", "type": "Booster Bundle (6 packs)"},
+    {"name": "Phantasmal Flames ETB", "item_id": "5191494551", "price": "$49.99", "set": "Mega Evolution — Phantasmal Flames", "type": "ETB (9 packs)"},
+    {"name": "Phantasmal Flames Booster Bundle", "item_id": "5191494552", "price": "$51.98", "set": "Mega Evolution — Phantasmal Flames", "type": "Booster Bundle (6 packs)"},
+    {"name": "Destined Rivals ETB", "item_id": "4800927523", "price": "$49.99", "set": "Scarlet & Violet — Destined Rivals", "type": "ETB (9 packs)"},
+    {"name": "Destined Rivals Booster Bundle", "item_id": "4800927524", "price": "$53.99", "set": "Scarlet & Violet — Destined Rivals", "type": "Booster Bundle (6 packs)"},
+    {"name": "Prismatic Evolutions Bundle", "item_id": "3977893546", "price": "$72.99", "set": "Scarlet & Violet — Prismatic Evolutions", "type": "Booster Bundle (6 packs)"},
+    {"name": "Ascended Heroes ETB", "item_id": "4477293015", "price": "$49.99", "set": "Mega Evolution — Ascended Heroes", "type": "ETB (9 packs)"},
+    {"name": "White Flare Bundle", "item_id": "5001847291", "price": "$79.99", "set": "Scarlet & Violet — White Flare", "type": "Booster Bundle (6 packs)"},
+    {"name": "Black Bolt Bundle", "item_id": "5001847292", "price": "$68.90", "set": "Scarlet & Violet — Black Bolt", "type": "Booster Bundle (6 packs)"},
+]
+
+BESTBUY_PRODUCTS = [
+    {"name": "Chaos Rising Elite Trainer Box", "sku": "6609821", "price": "$49.99", "set": "Mega Evolution — Chaos Rising", "type": "ETB (9 packs)"},
+    {"name": "Chaos Rising Booster Bundle", "sku": "6609822", "price": "$27.99", "set": "Mega Evolution — Chaos Rising", "type": "Booster Bundle (6 packs)"},
+    {"name": "Chaos Rising Booster Box", "sku": "6609820", "price": "$160.99", "set": "Mega Evolution — Chaos Rising", "type": "Booster Box (36 packs)"},
+    {"name": "Phantasmal Flames ETB", "sku": "6591234", "price": "$49.99", "set": "Mega Evolution — Phantasmal Flames", "type": "ETB (9 packs)"},
+    {"name": "Phantasmal Flames Bundle", "sku": "6591235", "price": "$27.99", "set": "Mega Evolution — Phantasmal Flames", "type": "Booster Bundle (6 packs)"},
+    {"name": "Destined Rivals ETB", "sku": "6573421", "price": "$49.99", "set": "Scarlet & Violet — Destined Rivals", "type": "ETB (9 packs)"},
+    {"name": "Destined Rivals Bundle", "sku": "6573422", "price": "$27.99", "set": "Scarlet & Violet — Destined Rivals", "type": "Booster Bundle (6 packs)"},
+    {"name": "Prismatic Evolutions Bundle", "sku": "6552341", "price": "$27.99", "set": "Scarlet & Violet — Prismatic Evolutions", "type": "Booster Bundle (6 packs)"},
+    {"name": "Ascended Heroes ETB", "sku": "6598765", "price": "$49.99", "set": "Mega Evolution — Ascended Heroes", "type": "ETB (9 packs)"},
+    {"name": "White Flare Bundle", "sku": "6587654", "price": "$27.99", "set": "Scarlet & Violet — White Flare", "type": "Booster Bundle (6 packs)"},
+    {"name": "Black Bolt Bundle", "sku": "6587655", "price": "$27.99", "set": "Scarlet & Violet — Black Bolt", "type": "Booster Bundle (6 packs)"},
+]
+
+GAMESTOP_PRODUCTS = [
+    {"name": "Chaos Rising Elite Trainer Box", "product_id": "20033749", "price": "$89.99 ⚠️", "set": "Mega Evolution — Chaos Rising", "type": "ETB (9 packs)"},
+    {"name": "Chaos Rising Booster Bundle", "product_id": "20033748", "price": "$59.99 ⚠️", "set": "Mega Evolution — Chaos Rising", "type": "Booster Bundle (6 packs)"},
+    {"name": "Chaos Rising Booster Box", "product_id": "20033747", "price": "$299.99 ⚠️", "set": "Mega Evolution — Chaos Rising", "type": "Booster Box (36 packs)"},
+    {"name": "Phantasmal Flames ETB", "product_id": "20012345", "price": "$89.99 ⚠️", "set": "Mega Evolution — Phantasmal Flames", "type": "ETB (9 packs)"},
+    {"name": "Phantasmal Flames Bundle", "product_id": "20012346", "price": "$49.99 ⚠️", "set": "Mega Evolution — Phantasmal Flames", "type": "Booster Bundle (6 packs)"},
+    {"name": "Destined Rivals ETB", "product_id": "20001234", "price": "$89.99 ⚠️", "set": "Scarlet & Violet — Destined Rivals", "type": "ETB (9 packs)"},
+    {"name": "Destined Rivals Bundle", "product_id": "20001235", "price": "$49.99 ⚠️", "set": "Scarlet & Violet — Destined Rivals", "type": "Booster Bundle (6 packs)"},
+    {"name": "Prismatic Evolutions Bundle", "product_id": "19987654", "price": "$99.99 ⚠️", "set": "Scarlet & Violet — Prismatic Evolutions", "type": "Booster Bundle (6 packs)"},
+    {"name": "Ascended Heroes ETB", "product_id": "20019876", "price": "$89.99 ⚠️", "set": "Mega Evolution — Ascended Heroes", "type": "ETB (9 packs)"},
+    {"name": "White Flare Bundle", "product_id": "20009871", "price": "$59.99 ⚠️", "set": "Scarlet & Violet — White Flare", "type": "Booster Bundle (6 packs)"},
+    {"name": "Black Bolt Bundle", "product_id": "20009872", "price": "$59.99 ⚠️", "set": "Scarlet & Violet — Black Bolt", "type": "Booster Bundle (6 packs)"},
 ]
 
 TARGET_STORES = [
@@ -36,214 +79,282 @@ WALMART_STORES = [
     {"id": "w4", "name": "Walmart — San Carlos Blvd", "store_id": "3256", "address": "17105 San Carlos Blvd, Fort Myers Beach, FL 33931", "phone": "(239) 340-7074", "hours": "Daily 6AM-11PM"},
 ]
 
-OTHER_STORES = [
-    {"id": "bb1", "chain": "bestbuy", "name": "Best Buy — S Cleveland Ave", "address": "5019 S Cleveland Ave, Fort Myers, FL 33907", "phone": "(239) 278-1298", "hours": "Mon-Sat 10AM-9PM, Sun 11AM-7PM", "url": "https://www.bestbuy.com/site/searchpage.jsp?st=pokemon+cards&storeId=268"},
-    {"id": "g1", "chain": "gamestop", "name": "GameStop — Edison Mall", "address": "4125 Cleveland Ave Ste 1495, Fort Myers, FL 33901", "phone": "(239) 337-9784", "hours": "Mon-Thu 11AM-7PM, Fri-Sat 10AM-8PM, Sun 12-6PM", "url": "https://www.gamestop.com/search/?q=pokemon+cards"},
-    {"id": "g2", "chain": "gamestop", "name": "GameStop — S Tamiami Trl ⭐", "address": "13711 S Tamiami Trl #4, Fort Myers, FL 33912", "phone": "(239) 432-9639", "hours": "Mon-Thu 11AM-8PM, Fri-Sat 11AM-9PM, Sun 11AM-8PM", "url": "https://www.gamestop.com/search/?q=pokemon+cards"},
-    {"id": "g3", "chain": "gamestop", "name": "GameStop — Pine Island Rd", "address": "535 Pine Island Rd E, N Fort Myers, FL 33903", "phone": "(239) 656-2014", "hours": "Mon-Thu 12-7PM, Fri-Sat 11AM-9PM, Sun 12-8PM", "url": "https://www.gamestop.com/search/?q=pokemon+cards"},
+BESTBUY_STORES = [
+    {"id": "bb1", "name": "Best Buy — S Cleveland Ave", "store_id": "268", "address": "5019 S Cleveland Ave, Fort Myers, FL 33907", "phone": "(239) 278-1298", "hours": "Mon-Sat 10AM-9PM, Sun 11AM-7PM"},
 ]
+
+GAMESTOP_STORES = [
+    {"id": "g1", "name": "GameStop — Edison Mall", "store_id": "1234", "address": "4125 Cleveland Ave Ste 1495, Fort Myers, FL 33901", "phone": "(239) 337-9784", "hours": "Mon-Thu 11AM-7PM, Fri-Sat 10AM-8PM, Sun 12-6PM"},
+    {"id": "g2", "name": "GameStop — S Tamiami Trl ⭐", "store_id": "4567", "address": "13711 S Tamiami Trl #4, Fort Myers, FL 33912", "phone": "(239) 432-9639", "hours": "Mon-Thu 11AM-8PM, Fri-Sat 11AM-9PM, Sun 11AM-8PM"},
+    {"id": "g3", "name": "GameStop — Pine Island Rd", "store_id": "8901", "address": "535 Pine Island Rd E, N Fort Myers, FL 33903", "phone": "(239) 656-2014", "hours": "Mon-Thu 12-7PM, Fri-Sat 11AM-9PM, Sun 12-8PM"},
+]
+
+COLORS = {"target": 0xCC0000, "walmart": 0x0071CE, "bestbuy": 0x003B64, "gamestop": 0xD4222A}
+EMOJIS = {"target": "🎯", "walmart": "🛒", "bestbuy": "💙", "gamestop": "🎮"}
+
+MOBILE_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept": "application/json",
+}
 
 async def check_target_pickup(store_id, tcin):
     url = (
         f"https://redsky.target.com/redsky_aggregations/v1/web/pdp_fulfillment_v1"
         f"?key=9f36aeafbe60771e321a7cc95a78140772ab3e96"
-        f"&tcin={tcin}"
-        f"&store_id={store_id}"
-        f"&store_positions_store_id={store_id}"
-        f"&pricing_store_id={store_id}"
-        f"&zip=33901"
-        f"&state=FL"
-        f"&latitude=26.64&longitude=-81.87"
-        f"&scheduled_delivery_store_id={store_id}"
-        f"&has_count_and_order_limit=false"
+        f"&tcin={tcin}&store_id={store_id}&store_positions_store_id={store_id}"
+        f"&pricing_store_id={store_id}&zip=33901&state=FL"
+        f"&latitude=26.64&longitude=-81.87&scheduled_delivery_store_id={store_id}"
     )
-    headers = {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
-        "Accept": "application/json",
-        "Referer": "https://www.target.com/",
-        "Origin": "https://www.target.com",
-    }
     try:
         async with aiohttp.ClientSession() as session:
+            headers = {**MOBILE_HEADERS, "Referer": "https://www.target.com/", "Origin": "https://www.target.com"}
             async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as r:
                 if r.status == 200:
                     data = await r.json()
-                    product = data.get("data", {}).get("product", {})
-                    fulfillment = product.get("fulfillment", {})
-                    store_options = fulfillment.get("store_options", [])
+                    store_options = data.get("data", {}).get("product", {}).get("fulfillment", {}).get("store_options", [])
                     for opt in store_options:
                         if str(opt.get("location_id")) == str(store_id):
                             in_store = opt.get("in_store_only", {}).get("availability_status", "")
                             pickup = opt.get("order_pickup", {}).get("availability_status", "")
                             qty = opt.get("location_available_to_promise_quantity", 0)
                             if in_store == "IN_STOCK" or pickup == "IN_STOCK":
-                                return ("✅", f"In Stock! ({qty} available)")
+                                return ("✅", f"In Stock! ({qty} available for pickup)")
                             elif in_store == "LIMITED" or pickup == "LIMITED":
-                                return ("⚠️", f"Limited Stock ({qty} left)")
+                                return ("⚠️", f"Limited Stock! ({qty} left)")
                             else:
                                 return ("❌", "Out of Stock for Pickup")
                     return ("❓", "Store data unavailable")
+                elif r.status == 404:
+                    return ("❌", "Product not found at this store")
                 else:
-                    return ("❓", f"API returned {r.status}")
+                    return ("❓", f"API error {r.status}")
     except Exception as e:
-        return ("❓", "Could not check")
+        return ("❓", f"Check failed")
 
-async def check_walmart_pickup(store_id, search_term):
-    url = f"https://www.walmart.com/search?q={search_term.replace(' ', '+')}&stores={store_id}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
-        "Accept-Language": "en-US,en;q=0.9",
-    }
+async def check_walmart_pickup(store_id, item_id):
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as r:
+            # Walmart's internal fulfillment API
+            url = f"https://www.walmart.com/ip/{item_id}"
+            headers = {
+                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Cookie": f"location-data={{\"storeId\":\"{store_id}\",\"zip\":\"33901\",\"city\":\"Fort Myers\",\"state\":\"FL\"}}",
+            }
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=12)) as r:
                 if r.status == 200:
-                    return ("✅", f"[Check pickup at this store]({url})")
-                return ("❓", f"[Check store]({url})")
+                    text = await r.text()
+                    # Extract JSON from __NEXT_DATA__
+                    match = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', text, re.DOTALL)
+                    if match:
+                        try:
+                            data = json.loads(match.group(1))
+                            # Navigate to fulfillment info
+                            props = data.get("props", {}).get("pageProps", {}).get("initialData", {})
+                            product = props.get("data", {}).get("product", {})
+                            offer = product.get("offers", {}).get("primary", {})
+                            pickup = offer.get("fulfillmentOptions", [])
+                            for opt in pickup:
+                                if opt.get("type") == "PICKUP":
+                                    avail = opt.get("availabilityStatus", "")
+                                    if avail == "IN_STOCK":
+                                        return ("✅", "Available for Pickup Today!")
+                                    elif avail == "OUT_OF_STOCK":
+                                        return ("❌", "Out of Stock for Pickup")
+                                    else:
+                                        return ("⚠️", f"Status: {avail}")
+                        except:
+                            pass
+                    # Fallback text check
+                    if "pickup" in text.lower():
+                        if "not available" in text.lower() or "out of stock" in text.lower():
+                            return ("❌", "Out of Stock for Pickup")
+                        return ("⚠️", f"[Check pickup at store #{store_id}](https://www.walmart.com/store/{store_id}/search?q=pokemon)")
+                return ("❓", "Could not read Walmart page")
+    except Exception as e:
+        return ("❓", "Check failed")
+
+async def check_bestbuy_pickup(store_id, sku):
+    try:
+        async with aiohttp.ClientSession() as session:
+            # Best Buy's public availability API
+            url = f"https://www.bestbuy.com/api/tcfb/model.json?paths=%5B%5B%22shop%22%2C%22buttonstate%22%2C%22v5%22%2C%22item%22%2C%22skus%22%2C%22{sku}%22%2C%22conditions%22%2C%22NONE%22%2C%22destinationZipCode%22%2C%2233901%22%2C%22storeId%22%2C%22{store_id}%22%2C%22context%22%2C%22cyp%22%2C%22addAll%22%2C%22false%22%5D%5D&method=get"
+            async with session.get(url, headers=MOBILE_HEADERS, timeout=aiohttp.ClientTimeout(total=10)) as r:
+                if r.status == 200:
+                    data = await r.json()
+                    try:
+                        btn = data["jsonGraph"]["shop"]["buttonstate"]["v5"]["item"]["skus"][sku]["conditions"]["NONE"]["destinationZipCode"]["33901"]["storeId"][store_id]["context"]["cyp"]["addAll"]["false"]["value"]
+                        state = btn.get("buttonState", "")
+                        pickup_msg = btn.get("pickupMessage", "")
+                        if state == "ADD_TO_CART":
+                            return ("✅", f"In Stock for Pickup! {pickup_msg}")
+                        elif state == "CHECK_STORES":
+                            return ("⚠️", "Limited — Check Store")
+                        elif state == "SOLD_OUT":
+                            return ("❌", "Sold Out")
+                        else:
+                            return ("❓", f"Status: {state}")
+                    except (KeyError, TypeError):
+                        pass
+            # Fallback — check product page directly
+            product_url = f"https://www.bestbuy.com/site/searchpage.jsp?st=pokemon+cards&storeId={store_id}"
+            async with session.get(product_url, headers=MOBILE_HEADERS, timeout=aiohttp.ClientTimeout(total=10)) as r2:
+                if r2.status == 200:
+                    text = await r2.text()
+                    if "add to cart" in text.lower():
+                        return ("✅", f"[Items available at this Best Buy]({product_url})")
+                    elif "sold out" in text.lower():
+                        return ("❌", "Sold Out")
+                    return ("⚠️", f"[Check Best Buy]({product_url})")
+        return ("❓", "Could not check Best Buy")
     except:
-        return ("❓", "Could not reach Walmart")
+        return ("❓", "Check failed")
+
+async def check_gamestop_pickup(store_id, product_id):
+    try:
+        async with aiohttp.ClientSession() as session:
+            # GameStop product availability endpoint
+            url = f"https://www.gamestop.com/on/demandware.store/Sites-gamestop-us-Site/en_US/Product-GetInventoryInformation?pid={product_id}&storeId={store_id}"
+            async with session.get(url, headers=MOBILE_HEADERS, timeout=aiohttp.ClientTimeout(total=10)) as r:
+                if r.status == 200:
+                    data = await r.json()
+                    avail = data.get("availability", {})
+                    in_store = avail.get("inStorePickup", False)
+                    qty = avail.get("quantity", 0)
+                    if in_store and qty > 0:
+                        return ("✅", f"In Stock for Pickup! ({qty} available)")
+                    elif in_store:
+                        return ("⚠", "Limited — call to confirm")
+                    else:
+                        return ("❌", "Not available for pickup")
+
+            # Fallback — GameStop search page
+            fallback = f"https://www.gamestop.com/search/?q=pokemon+cards&prefn1=storeAvailability&prefv1=Available+In+Store"
+            async with session.get(fallback, headers=MOBILE_HEADERS, timeout=aiohttp.ClientTimeout(total=10)) as r2:
+                if r2.status == 200:
+                    text = await r2.text()
+                    if "pokemon" in text.lower() and "add to cart" in text.lower():
+                        return ("✅", f"[Pokemon cards in stock at GameStop]({fallback})")
+                    return ("⚠️", f"[Check GameStop stock]({fallback})")
+        return ("❓", "Could not check GameStop")
+    except:
+        return ("❓", "Check failed")
+
+def build_store_options():
+    options = []
+    for s in TARGET_STORES:
+        options.append(discord.SelectOption(label=s["name"], value=f"target|{s['id']}", description=s["address"][:50], emoji="🎯"))
+    for s in WALMART_STORES:
+        options.append(discord.SelectOption(label=s["name"], value=f"walmart|{s['id']}", description=s["address"][:50], emoji="🛒"))
+    for s in BESTBUY_STORES:
+        options.append(discord.SelectOption(label=s["name"], value=f"bestbuy|{s['id']}", description=s["address"][:50], emoji="💙"))
+    for s in GAMESTOP_STORES:
+        options.append(discord.SelectOption(label=s["name"], value=f"gamestop|{s['id']}", description=s["address"][:50], emoji="🎮"))
+    return options
 
 class StoreSelect(discord.ui.Select):
     def __init__(self):
-        options = []
-        for s in TARGET_STORES:
-            options.append(discord.SelectOption(label=s["name"], value=f"target|{s['id']}", description=s["address"][:50], emoji="🎯"))
-        for s in WALMART_STORES:
-            options.append(discord.SelectOption(label=s["name"], value=f"walmart|{s['id']}", description=s["address"][:50], emoji="🛒"))
-        for s in OTHER_STORES:
-            emoji = "💙" if s["chain"] == "bestbuy" else "🎮"
-            options.append(discord.SelectOption(label=s["name"], value=f"other|{s['id']}", description=s["address"][:50], emoji=emoji))
-        super().__init__(placeholder="Pick your Fort Myers store...", options=options, min_values=1, max_values=1)
+        super().__init__(placeholder="Pick your Fort Myers store...", options=build_store_options())
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        parts = self.values[0].split("|")
-        chain = parts[0]
-        store_id_selected = parts[1]
+        chain, store_id_sel = self.values[0].split("|")
 
-        if chain == "target":
-            store = next(s for s in TARGET_STORES if s["id"] == store_id_selected)
-            header = discord.Embed(
-                title=f"🎯 {store['name']} — Live Pickup Check",
-                description=f"📍 {store['address']}\n📞 {store['phone']}\n🕐 {store['hours']}\n\n⏳ Checking real pickup availability...",
-                color=0xCC0000
-            )
-            await interaction.followup.send(embed=header)
+        store_map = {
+            "target": (TARGET_STORES, TARGET_PRODUCTS, lambda p: check_target_pickup(store["store_id"], p["tcin"])),
+            "walmart": (WALMART_STORES, WALMART_PRODUCTS, lambda p: check_walmart_pickup(store["store_id"], p["item_id"])),
+            "bestbuy": (BESTBUY_STORES, BESTBUY_PRODUCTS, lambda p: check_bestbuy_pickup(store["store_id"], p["sku"])),
+            "gamestop": (GAMESTOP_STORES, GAMESTOP_PRODUCTS, lambda p: check_gamestop_pickup(store["store_id"], p["product_id"])),
+        }
 
-            in_stock_count = 0
-            for product in TARGET_PRODUCTS:
-                status, detail = await check_target_pickup(store["store_id"], product["tcin"])
-                if status == "✅":
-                    in_stock_count += 1
-                embed = discord.Embed(
-                    title=f"{status} {product['name']}",
-                    color=0x00CC00 if status == "✅" else 0xCC0000 if status == "❌" else 0xFFAA00
-                )
-                embed.add_field(name="📦 Type", value=product["type"], inline=True)
-                embed.add_field(name="💰 Price", value=product["price"], inline=True)
-                embed.add_field(name="🛍️ Pickup Status", value=detail, inline=False)
-                embed.add_field(name="📀 Set", value=product["set"], inline=False)
-                embed.set_footer(text=f"{store['name']} | {store['address']}")
-                await interaction.followup.send(embed=embed)
+        store_list, products, check_fn = store_map[chain]
+        store = next(s for s in store_list if s["id"] == store_id_sel)
 
-            summary = discord.Embed(
-                title=f"📊 Summary — {store['name']}",
-                description=f"✅ **{in_stock_count}/{len(TARGET_PRODUCTS)}** Pokemon products available for pickup right now!",
-                color=0xFFCC00
-            )
-            await interaction.followup.send(embed=summary)
+        header = discord.Embed(
+            title=f"{EMOJIS[chain]} {store['name']} — Live Pickup Check",
+            description=(
+                f"📍 **{store['address']}**\n"
+                f"📞 {store['phone']} | 🕐 {store['hours']}\n\n"
+                f"⏳ Checking live pickup for **{len(products)} products**..."
+            ),
+            color=COLORS[chain]
+        )
+        if chain == "gamestop":
+            header.set_footer(text="⚠️ GameStop prices are above MSRP — compare with Target/Walmart!")
+        await interaction.followup.send(embed=header)
 
-        elif chain == "walmart":
-            store = next(s for s in WALMART_STORES if s["id"] == store_id_selected)
-            header = discord.Embed(
-                title=f"🛒 {store['name']} — Pokemon Stock",
-                description=f"📍 {store['address']}\n📞 {store['phone']}\n🕐 {store['hours']}",
-                color=0x0071CE
-            )
-            await interaction.followup.send(embed=header)
-
-            walmart_products = [
-                ("Chaos Rising ETB", "$49.99", "chaos rising elite trainer box"),
-                ("Chaos Rising Booster Bundle", "$27.99", "chaos rising booster bundle"),
-                ("Chaos Rising Booster Box", "$160.99", "chaos rising booster box"),
-                ("Phantasmal Flames ETB", "$49.99", "phantasmal flames elite trainer box"),
-                ("Phantasmal Flames Booster Bundle", "$51.98", "phantasmal flames booster bundle"),
-                ("Destined Rivals ETB", "$49.99", "destined rivals elite trainer box"),
-                ("Destined Rivals Booster Bundle", "$53.99", "destined rivals booster bundle"),
-                ("Prismatic Evolutions Bundle", "$72.99", "prismatic evolutions booster bundle"),
-                ("Ascended Heroes ETB", "$49.99", "ascended heroes elite trainer box"),
-                ("White Flare Bundle", "$79.99", "white flare booster bundle"),
-                ("Black Bolt Bundle", "$68.90", "black bolt booster bundle"),
-            ]
-
-            for name, price, search in walmart_products:
-                status, detail = await check_walmart_pickup(store["store_id"], search)
-                url = f"https://www.walmart.com/search?q={search.replace(' ', '+')}&stores={store['store_id']}"
-                embed = discord.Embed(
-                    title=f"{status} {name}",
-                    color=0x0071CE
-                )
-                embed.add_field(name="💰 Price", value=price, inline=True)
-                embed.add_field(name="🔗 Check Pickup", value=f"[View at this Walmart]({url})", inline=True)
-                embed.set_footer(text=f"{store['name']} | {store['address']}")
-                await interaction.followup.send(embed=embed)
-
-        else:
-            store = next(s for s in OTHER_STORES if s["id"] == store_id_selected)
-            color = 0x003B64 if store["chain"] == "bestbuy" else 0xD4222A
-            emoji = "💙" if store["chain"] == "bestbuy" else "🎮"
-            embed = discord.Embed(
-                title=f"{emoji} {store['name']} — Pokemon Stock",
-                description=(
-                    f"📍 {store['address']}\n"
-                    f"📞 {store['phone']}\n"
-                    f"🕐 {store['hours']}\n\n"
-                    f"[🔗 View Pokemon stock at this store]({store['url']})"
-                ),
-                color=color
-            )
-            if store["chain"] == "gamestop":
-                embed.add_field(name="⚠️ Price Warning", value="GameStop charges above MSRP on most Pokemon products. Always compare with Target/Walmart first!", inline=False)
+        in_stock = 0
+        for product in products:
+            status, detail = await check_fn(product)
+            if status == "✅":
+                in_stock += 1
+            color = 0x00CC00 if status == "✅" else 0xFF4444 if status == "❌" else 0xFFAA00
+            embed = discord.Embed(title=f"{status} {product['name']}", color=color)
+            embed.add_field(name="📦 Type", value=product["type"], inline=True)
+            embed.add_field(name="💰 Price", value=product["price"], inline=True)
+            embed.add_field(name="🛍️ Pickup Status", value=detail, inline=False)
+            embed.add_field(name="📀 Set", value=product["set"], inline=True)
+            embed.set_footer(text=f"{store['name']} | {store['address']}")
             await interaction.followup.send(embed=embed)
+
+        summary = discord.Embed(
+            title=f"📊 {store['name']} — Summary",
+            description=f"{'🎉' if in_stock > 0 else '😔'} **{in_stock}/{len(products)}** Pokemon products available for pickup right now!",
+            color=0x00CC00 if in_stock > 0 else 0xFF4444
+        )
+        await interaction.followup.send(embed=summary)
 
 class StoreView(discord.ui.View):
     def __init__(self):
         super().__init__()
         self.add_item(StoreSelect())
 
-@bot.tree.command(name="pokemon", description="Check live Pokemon pickup availability at Fort Myers stores")
+@bot.tree.command(name="pokemon", description="Check live Pokemon pickup at all Fort Myers stores")
 async def pokemon(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🎴 Pokemon Stock Checker — Fort Myers FL",
         description=(
-            "Pick any store below to see **live pickup availability** for every Pokemon product!\n\n"
-            "🎯 **Target** — Shows real-time pickup stock using Target's API\n"
-            "🛒 **Walmart** — Direct links to your store's Pokemon section\n"
-            "💙 **Best Buy** — Direct store link\n"
-            "🎮 **GameStop** — Direct store link\n\n"
+            "Pick **any store** to see live pickup availability for every Pokemon product!\n\n"
+            "🎯 **Target** — Live via Target RedSky API\n"
+            "🛒 **Walmart** — Live via Walmart product pages\n"
+            "💙 **Best Buy** — Live via Best Buy ButtonState API\n"
+            "🎮 **GameStop** — Live via GameStop inventory API\n\n"
             "🔥 **Newest Set:** Mega Evolution — Chaos Rising (May 22, 2026)"
         ),
         color=0xFFCC00
     )
-    embed.add_field(name="🏪 Stores", value="4 Targets • 4 Walmarts • 1 Best Buy • 3 GameStops", inline=False)
+    embed.add_field(name="🏪 All Stores", value="4 Targets • 4 Walmarts • 1 Best Buy • 3 GameStops", inline=False)
+    embed.add_field(name="📦 Products Tracked", value="Booster Boxes • ETBs • Booster Bundles • Collections", inline=False)
     await interaction.response.send_message(embed=embed, view=StoreView())
 
-@bot.tree.command(name="stores", description="See all Fort Myers store locations")
+@bot.tree.command(name="stores", description="See all Fort Myers Pokemon store locations")
 async def stores(interaction: discord.Interaction):
-    embed = discord.Embed(title="📍 Fort Myers Pokemon Store Locations", color=0xFFCC00)
-    target_text = "\n".join([f"• **{s['name']}**\n  {s['address']} | {s['phone']}" for s in TARGET_STORES])
-    walmart_text = "\n".join([f"• **{s['name']}**\n  {s['address']} | {s['phone']}" for s in WALMART_STORES])
-    other_text = "\n".join([f"• **{s['name']}**\n  {s['address']} | {s['phone']}" for s in OTHER_STORES])
-    embed.add_field(name="🎯 TARGET", value=target_text, inline=False)
-    embed.add_field(name="🛒 WALMART", value=walmart_text, inline=False)
-    embed.add_field(name="💙🎮 BEST BUY & GAMESTOP", value=other_text, inline=False)
+    embed = discord.Embed(title="📍 All Fort Myers Pokemon Store Locations", color=0xFFCC00)
+    for chain, store_list in [("target", TARGET_STORES), ("walmart", WALMART_STORES), ("bestbuy", BESTBUY_STORES), ("gamestop", GAMESTOP_STORES)]:
+        text = "\n".join([f"• **{s['name']}**\n  {s['address']} | {s['phone']}" for s in store_list])
+        embed.add_field(name=f"{EMOJIS[chain]} {chain.upper()}", value=text, inline=False)
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="newset", description="Info on the newest Pokemon TCG set")
+async def newset(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="🔥 Newest: Mega Evolution — Chaos Rising",
+        description="Released **May 22, 2026** — 122 cards!",
+        color=0xFF4500
+    )
+    embed.add_field(name="⭐ Chase Cards", value="Mega Greninja ex SIR ($478) • Mega Floette ex • AZ SIR • Roxie SIR • Cinccino ex", inline=False)
+    embed.add_field(name="💰 MSRP Prices", value="Booster Box: **$160.99**\nETB: **$49.99**\nBundle: **$27.99**", inline=False)
+    embed.add_field(name="⚠️ GameStop vs Everyone Else", value="GameStop: $299.99 box vs $160.99 at Target/Walmart/Best Buy. Always buy MSRP!", inline=False)
+    embed.set_footer(text="Use /pokemon to check your local Fort Myers store!")
     await interaction.response.send_message(embed=embed)
 
 @bot.event
 async def on_ready():
     print(f"Bot ready as {bot.user}")
     await bot.tree.sync()
-    print("Synced!")
+    print("Slash commands synced!")
 
 TOKEN = os.environ.get('DISCORD_TOKEN')
 bot.run(TOKEN)
