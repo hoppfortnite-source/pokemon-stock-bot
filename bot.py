@@ -1,102 +1,259 @@
 import discord
 from discord.ext import commands
-import aiohttp
 import os
-import re
 
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+PRODUCTS = [
+    {
+        "name": "Chaos Rising Booster Box",
+        "set": "Mega Evolution — Chaos Rising",
+        "type": "Booster Box (36 packs)",
+        "release": "May 22, 2026",
+        "description": "36 packs, 10 cards each. Features Mega Greninja ex, Mega Floette ex.",
+        "image": "https://assets.pokemon.com/assets/cms2/img/cards/web/MEG/MEG_EN_logo.png",
+        "prices": {"target": "$160.99", "walmart": "$160.99", "bestbuy": "$160.99", "gamestop": "$299.99"},
+        "urls": {
+            "target": "https://www.target.com/s?searchTerm=chaos+rising+booster+box",
+            "walmart": "https://www.walmart.com/search?q=chaos+rising+booster+box",
+            "bestbuy": "https://www.bestbuy.com/site/searchpage.jsp?st=chaos+rising+booster+box",
+            "gamestop": "https://www.gamestop.com/search/?q=chaos+rising+booster+box",
+        },
+    },
+    {
+        "name": "Chaos Rising Elite Trainer Box",
+        "set": "Mega Evolution — Chaos Rising",
+        "type": "Elite Trainer Box (9 packs)",
+        "release": "May 22, 2026",
+        "description": "9 booster packs, promo card, accessories. Mega Greninja ex art.",
+        "image": "https://assets.pokemon.com/assets/cms2/img/cards/web/MEG/MEG_EN_logo.png",
+        "prices": {"target": "$49.99", "walmart": "$49.99", "bestbuy": "$49.99", "gamestop": "$89.99"},
+        "urls": {
+            "target": "https://www.target.com/s?searchTerm=chaos+rising+elite+trainer+box",
+            "walmart": "https://www.walmart.com/search?q=chaos+rising+elite+trainer+box",
+            "bestbuy": "https://www.bestbuy.com/site/searchpage.jsp?st=chaos+rising+elite+trainer+box",
+            "gamestop": "https://www.gamestop.com/search/?q=chaos+rising+elite+trainer+box",
+        },
+    },
+    {
+        "name": "Chaos Rising Booster Bundle",
+        "set": "Mega Evolution — Chaos Rising",
+        "type": "Booster Bundle (6 packs)",
+        "release": "May 22, 2026",
+        "description": "6 booster packs. Great value for the latest set.",
+        "image": "https://assets.pokemon.com/assets/cms2/img/cards/web/MEG/MEG_EN_logo.png",
+        "prices": {"target": "$27.99", "walmart": "$27.99", "bestbuy": "$27.99", "gamestop": "$59.99"},
+        "urls": {
+            "target": "https://www.target.com/s?searchTerm=chaos+rising+booster+bundle",
+            "walmart": "https://www.walmart.com/search?q=chaos+rising+booster+bundle",
+            "bestbuy": "https://www.bestbuy.com/site/searchpage.jsp?st=chaos+rising+booster+bundle",
+            "gamestop": "https://www.gamestop.com/search/?q=chaos+rising+booster+bundle",
+        },
+    },
+    {
+        "name": "Phantasmal Flames Booster Box",
+        "set": "Mega Evolution — Phantasmal Flames",
+        "type": "Booster Box (36 packs)",
+        "release": "Nov 14, 2025",
+        "description": "36 packs. Features Mega Charizard X ex, Mega Gengar ex, Mega Heracross ex.",
+        "image": "https://assets.pokemon.com/assets/cms2/img/cards/web/PFL/PFL_EN_logo.png",
+        "prices": {"target": "$143.99", "walmart": "$143.99", "bestbuy": "$143.99", "gamestop": "$249.99"},
+        "urls": {
+            "target": "https://www.target.com/s?searchTerm=phantasmal+flames+booster+box",
+            "walmart": "https://www.walmart.com/search?q=phantasmal+flames+booster+box",
+            "bestbuy": "https://www.bestbuy.com/site/searchpage.jsp?st=phantasmal+flames+booster+box",
+            "gamestop": "https://www.gamestop.com/search/?q=phantasmal+flames+booster+box",
+        },
+    },
+    {
+        "name": "Phantasmal Flames Elite Trainer Box",
+        "set": "Mega Evolution — Phantasmal Flames",
+        "type": "Elite Trainer Box (9 packs)",
+        "release": "Nov 14, 2025",
+        "description": "9 packs, promo card. Mega Charizard X ex art. Most popular ETB.",
+        "image": "https://assets.pokemon.com/assets/cms2/img/cards/web/PFL/PFL_EN_logo.png",
+        "prices": {"target": "$49.99", "walmart": "$49.99", "bestbuy": "$49.99", "gamestop": "$89.99"},
+        "urls": {
+            "target": "https://www.target.com/s?searchTerm=phantasmal+flames+elite+trainer+box",
+            "walmart": "https://www.walmart.com/search?q=phantasmal+flames+elite+trainer+box",
+            "bestbuy": "https://www.bestbuy.com/site/searchpage.jsp?st=phantasmal+flames+elite+trainer+box",
+            "gamestop": "https://www.gamestop.com/search/?q=phantasmal+flames+elite+trainer+box",
+        },
+    },
+    {
+        "name": "Phantasmal Flames Booster Bundle",
+        "set": "Mega Evolution — Phantasmal Flames",
+        "type": "Booster Bundle (6 packs)",
+        "release": "Nov 14, 2025",
+        "description": "6 packs. Mega Charizard X ex and Mega Gengar ex inside.",
+        "image": "https://assets.pokemon.com/assets/cms2/img/cards/web/PFL/PFL_EN_logo.png",
+        "prices": {"target": "$27.99", "walmart": "$51.98", "bestbuy": "$27.99", "gamestop": "$49.99"},
+        "urls": {
+            "target": "https://www.target.com/s?searchTerm=phantasmal+flames+booster+bundle",
+            "walmart": "https://www.walmart.com/search?q=phantasmal+flames+booster+bundle",
+            "bestbuy": "https://www.bestbuy.com/site/searchpage.jsp?st=phantasmal+flames+booster+bundle",
+            "gamestop": "https://www.gamestop.com/search/?q=phantasmal+flames+booster+bundle",
+        },
+    },
+    {
+        "name": "Destined Rivals Booster Box",
+        "set": "Scarlet & Violet — Destined Rivals",
+        "type": "Booster Box (36 packs)",
+        "release": "May 30, 2025",
+        "description": "36 packs. Team Rocket's Mewtwo ex. High demand reprint incoming.",
+        "image": "https://assets.pokemon.com/assets/cms2/img/cards/web/DRI/DRI_EN_logo.png",
+        "prices": {"target": "$143.99", "walmart": "$143.99", "bestbuy": "$143.99", "gamestop": "$249.99"},
+        "urls": {
+            "target": "https://www.target.com/s?searchTerm=destined+rivals+booster+box",
+            "walmart": "https://www.walmart.com/search?q=destined+rivals+booster+box",
+            "bestbuy": "https://www.bestbuy.com/site/searchpage.jsp?st=destined+rivals+booster+box",
+            "gamestop": "https://www.gamestop.com/search/?q=destined+rivals+booster+box",
+        },
+    },
+    {
+        "name": "Destined Rivals Elite Trainer Box",
+        "set": "Scarlet & Violet — Destined Rivals",
+        "type": "Elite Trainer Box (9 packs)",
+        "release": "May 30, 2025",
+        "description": "9 packs, promo card. Features Team Rocket's Mewtwo ex.",
+        "image": "https://assets.pokemon.com/assets/cms2/img/cards/web/DRI/DRI_EN_logo.png",
+        "prices": {"target": "$49.99", "walmart": "$49.99", "bestbuy": "$49.99", "gamestop": "$89.99"},
+        "urls": {
+            "target": "https://www.target.com/s?searchTerm=destined+rivals+elite+trainer+box",
+            "walmart": "https://www.walmart.com/search?q=destined+rivals+elite+trainer+box",
+            "bestbuy": "https://www.bestbuy.com/site/searchpage.jsp?st=destined+rivals+elite+trainer+box",
+            "gamestop": "https://www.gamestop.com/search/?q=destined+rivals+elite+trainer+box",
+        },
+    },
+    {
+        "name": "Destined Rivals Booster Bundle",
+        "set": "Scarlet & Violet — Destined Rivals",
+        "type": "Booster Bundle (6 packs)",
+        "release": "May 30, 2025",
+        "description": "6 packs. Most sought-after bundle right now.",
+        "image": "https://assets.pokemon.com/assets/cms2/img/cards/web/DRI/DRI_EN_logo.png",
+        "prices": {"target": "$27.99", "walmart": "$53.99", "bestbuy": "$27.99", "gamestop": "$49.99"},
+        "urls": {
+            "target": "https://www.target.com/s?searchTerm=destined+rivals+booster+bundle",
+            "walmart": "https://www.walmart.com/search?q=destined+rivals+booster+bundle",
+            "bestbuy": "https://www.bestbuy.com/site/searchpage.jsp?st=destined+rivals+booster+bundle",
+            "gamestop": "https://www.gamestop.com/search/?q=destined+rivals+booster+bundle",
+        },
+    },
+    {
+        "name": "Prismatic Evolutions Booster Bundle",
+        "set": "Scarlet & Violet — Prismatic Evolutions",
+        "type": "Booster Bundle (6 packs)",
+        "release": "Jan 17, 2025",
+        "description": "6 packs. Eevee evolutions. Still the most hunted product.",
+        "image": "https://assets.pokemon.com/assets/cms2/img/cards/web/PRE/PRE_EN_logo.png",
+        "prices": {"target": "$27.99", "walmart": "$72.99", "bestbuy": "$27.99", "gamestop": "$99.99"},
+        "urls": {
+            "target": "https://www.target.com/s?searchTerm=prismatic+evolutions+booster+bundle",
+            "walmart": "https://www.walmart.com/search?q=prismatic+evolutions+booster+bundle",
+            "bestbuy": "https://www.bestbuy.com/site/searchpage.jsp?st=prismatic+evolutions+booster+bundle",
+            "gamestop": "https://www.gamestop.com/search/?q=prismatic+evolutions+booster+bundle",
+        },
+    },
+    {
+        "name": "Mega Evolution Ascended Heroes ETB",
+        "set": "Mega Evolution — Ascended Heroes",
+        "type": "Elite Trainer Box (9 packs)",
+        "release": "Jan 30, 2026",
+        "description": "9 packs + N's Zekrom promo card. Special set.",
+        "image": "https://assets.pokemon.com/assets/cms2/img/cards/web/MEG/MEG_EN_logo.png",
+        "prices": {"target": "$49.99", "walmart": "$49.99", "bestbuy": "$49.99", "gamestop": "$89.99"},
+        "urls": {
+            "target": "https://www.target.com/s?searchTerm=ascended+heroes+elite+trainer+box",
+            "walmart": "https://www.walmart.com/search?q=ascended+heroes+elite+trainer+box",
+            "bestbuy": "https://www.bestbuy.com/site/searchpage.jsp?st=ascended+heroes+elite+trainer+box",
+            "gamestop": "https://www.gamestop.com/search/?q=ascended+heroes+elite+trainer+box",
+        },
+    },
+    {
+        "name": "Pokemon Day 2026 Collection",
+        "set": "Pokemon Day 2026",
+        "type": "Special Collection Box",
+        "release": "Jan 30, 2026",
+        "description": "Pikachu 30th anniversary promo, coin, 3 packs (2 Phantasmal Flames + 1 Mega Evolution).",
+        "image": "https://assets.pokemon.com/assets/cms2/img/misc/pokemon-day/pokemon-day.png",
+        "prices": {"target": "$14.99", "walmart": "$31.99", "bestbuy": "$14.99", "gamestop": "$24.99"},
+        "urls": {
+            "target": "https://www.target.com/s?searchTerm=pokemon+day+2026+collection",
+            "walmart": "https://www.walmart.com/search?q=pokemon+day+2026+collection",
+            "bestbuy": "https://www.bestbuy.com/site/searchpage.jsp?st=pokemon+day+2026+collection",
+            "gamestop": "https://www.gamestop.com/search/?q=pokemon+day+2026+collection",
+        },
+    },
+    {
+        "name": "White Flare Booster Bundle",
+        "set": "Scarlet & Violet — White Flare",
+        "type": "Booster Bundle (6 packs)",
+        "release": "Jul 18, 2025",
+        "description": "6 packs. White Kyurem and Unova Pokemon featured.",
+        "image": "https://assets.pokemon.com/assets/cms2/img/cards/web/WHT/WHT_EN_logo.png",
+        "prices": {"target": "$27.99", "walmart": "$79.99", "bestbuy": "$27.99", "gamestop": "$59.99"},
+        "urls": {
+            "target": "https://www.target.com/s?searchTerm=white+flare+booster+bundle",
+            "walmart": "https://www.walmart.com/search?q=white+flare+booster+bundle",
+            "bestbuy": "https://www.bestbuy.com/site/searchpage.jsp?st=white+flare+booster+bundle",
+            "gamestop": "https://www.gamestop.com/search/?q=white+flare+booster+bundle",
+        },
+    },
+    {
+        "name": "Black Bolt Booster Bundle",
+        "set": "Scarlet & Violet — Black Bolt",
+        "type": "Booster Bundle (6 packs)",
+        "release": "Jul 18, 2025",
+        "description": "6 packs. Black Kyurem and Dark-type Pokemon featured.",
+        "image": "https://assets.pokemon.com/assets/cms2/img/cards/web/BLK/BLK_EN_logo.png",
+        "prices": {"target": "$27.99", "walmart": "$68.90", "bestbuy": "$27.99", "gamestop": "$59.99"},
+        "urls": {
+            "target": "https://www.target.com/s?searchTerm=black+bolt+booster+bundle",
+            "walmart": "https://www.walmart.com/search?q=black+bolt+booster+bundle",
+            "bestbuy": "https://www.bestbuy.com/site/searchpage.jsp?st=black+bolt+booster+bundle",
+            "gamestop": "https://www.gamestop.com/search/?q=black+bolt+booster+bundle",
+        },
+    },
+]
+
 STORES = {
     "target": [
-        {"id": "t1", "name": "Target — Dynasty Dr", "address": "9350 Dynasty Dr, Fort Myers, FL 33905", "phone": "(239) 265-9022", "hours": "Mon-Sat 8AM-10/11PM, Sun 8AM-10PM", "search_url": "https://www.target.com/s?searchTerm=pokemon+cards&storeId=1267"},
-        {"id": "t2", "name": "Target — S Tamiami Trl", "address": "13711 S Tamiami Trl, Fort Myers, FL 33912", "phone": "(239) 481-8860", "hours": "Mon-Sat 7AM-11PM, Sun 7AM-10PM", "search_url": "https://www.target.com/s?searchTerm=pokemon+cards&storeId=2696"},
-        {"id": "t3", "name": "Target — Gulf Center Dr ⭐", "address": "10000 Gulf Center Dr, Fort Myers, FL 33913", "phone": "(239) 432-2641", "hours": "Mon-Sat 7AM-11PM, Sun 7AM-10PM", "search_url": "https://www.target.com/s?searchTerm=pokemon+cards&storeId=1268"},
-        {"id": "t4", "name": "Target — San Carlos Blvd", "address": "15880 San Carlos Blvd, Fort Myers, FL 33908", "phone": "(239) 265-9002", "hours": "Daily 7AM-10PM", "search_url": "https://www.target.com/s?searchTerm=pokemon+cards&storeId=2354"},
+        {"id": "t1", "name": "Target — Dynasty Dr", "address": "9350 Dynasty Dr, Fort Myers, FL 33905", "phone": "(239) 265-9022", "hours": "Mon-Sat 8AM-10/11PM, Sun 8AM-10PM"},
+        {"id": "t2", "name": "Target — S Tamiami Trl", "address": "13711 S Tamiami Trl, Fort Myers, FL 33912", "phone": "(239) 481-8860", "hours": "Mon-Sat 7AM-11PM, Sun 7AM-10PM"},
+        {"id": "t3", "name": "Target — Gulf Center Dr ⭐", "address": "10000 Gulf Center Dr, Fort Myers, FL 33913", "phone": "(239) 432-2641", "hours": "Mon-Sat 7AM-11PM, Sun 7AM-10PM"},
+        {"id": "t4", "name": "Target — San Carlos Blvd", "address": "15880 San Carlos Blvd, Fort Myers, FL 33908", "phone": "(239) 265-9002", "hours": "Daily 7AM-10PM"},
     ],
     "walmart": [
-        {"id": "w1", "name": "Walmart — Colonial Blvd", "address": "4770 Colonial Blvd, Fort Myers, FL 33966", "phone": "(239) 274-2920", "hours": "Daily 6AM-11PM", "search_url": "https://www.walmart.com/search?q=pokemon+cards&stores=2924"},
-        {"id": "w2", "name": "Walmart — Six Mile Cypress ⭐", "address": "14821 Six Mile Cypress Pkwy, Fort Myers, FL 33912", "phone": "(239) 437-1880", "hours": "Daily 6AM-11PM", "search_url": "https://www.walmart.com/search?q=pokemon+cards&stores=3483"},
-        {"id": "w3", "name": "Walmart — Pine Island Rd", "address": "545 Pine Island Rd, N Fort Myers, FL 33903", "phone": "(239) 997-9991", "hours": "Daily 6AM-11PM", "search_url": "https://www.walmart.com/search?q=pokemon+cards&stores=5162"},
-        {"id": "w4", "name": "Walmart — San Carlos Blvd", "address": "17105 San Carlos Blvd, Fort Myers Beach, FL 33931", "phone": "(239) 340-7074", "hours": "Daily 6AM-11PM", "search_url": "https://www.walmart.com/search?q=pokemon+cards&stores=3256"},
+        {"id": "w1", "name": "Walmart — Colonial Blvd", "address": "4770 Colonial Blvd, Fort Myers, FL 33966", "phone": "(239) 274-2920", "hours": "Daily 6AM-11PM"},
+        {"id": "w2", "name": "Walmart — Six Mile Cypress ⭐", "address": "14821 Six Mile Cypress Pkwy, Fort Myers, FL 33912", "phone": "(239) 437-1880", "hours": "Daily 6AM-11PM"},
+        {"id": "w3", "name": "Walmart — Pine Island Rd", "address": "545 Pine Island Rd, N Fort Myers, FL 33903", "phone": "(239) 997-9991", "hours": "Daily 6AM-11PM"},
+        {"id": "w4", "name": "Walmart — San Carlos Blvd", "address": "17105 San Carlos Blvd, Fort Myers Beach, FL 33931", "phone": "(239) 340-7074", "hours": "Daily 6AM-11PM"},
     ],
     "bestbuy": [
-        {"id": "bb1", "name": "Best Buy — S Cleveland Ave", "address": "5019 S Cleveland Ave, Fort Myers, FL 33907", "phone": "(239) 278-1298", "hours": "Mon-Sat 10AM-9PM, Sun 11AM-7PM", "search_url": "https://www.bestbuy.com/site/searchpage.jsp?st=pokemon+trading+cards&storeId=268"},
+        {"id": "bb1", "name": "Best Buy — S Cleveland Ave", "address": "5019 S Cleveland Ave, Fort Myers, FL 33907", "phone": "(239) 278-1298", "hours": "Mon-Sat 10AM-9PM, Sun 11AM-7PM"},
     ],
     "gamestop": [
-        {"id": "g1", "name": "GameStop — Edison Mall", "address": "4125 Cleveland Ave Ste 1495, Fort Myers, FL 33901", "phone": "(239) 337-9784", "hours": "Mon-Thu 11AM-7PM, Fri-Sat 10AM-8PM, Sun 12-6PM", "search_url": "https://www.gamestop.com/search/?q=pokemon+cards"},
-        {"id": "g2", "name": "GameStop — S Tamiami Trl ⭐", "address": "13711 S Tamiami Trl #4, Fort Myers, FL 33912", "phone": "(239) 432-9639", "hours": "Mon-Thu 11AM-8PM, Fri-Sat 11AM-9PM, Sun 11AM-8PM", "search_url": "https://www.gamestop.com/search/?q=pokemon+cards"},
-        {"id": "g3", "name": "GameStop — Pine Island Rd", "address": "535 Pine Island Rd E, N Fort Myers, FL 33903", "phone": "(239) 656-2014", "hours": "Mon-Thu 12-7PM, Fri-Sat 11AM-9PM, Sun 12-8PM", "search_url": "https://www.gamestop.com/search/?q=pokemon+cards"},
+        {"id": "g1", "name": "GameStop — Edison Mall", "address": "4125 Cleveland Ave Ste 1495, Fort Myers, FL 33901", "phone": "(239) 337-9784", "hours": "Mon-Thu 11AM-7PM, Fri-Sat 10AM-8PM, Sun 12-6PM"},
+        {"id": "g2", "name": "GameStop — S Tamiami Trl ⭐", "address": "13711 S Tamiami Trl #4, Fort Myers, FL 33912", "phone": "(239) 432-9639", "hours": "Mon-Thu 11AM-8PM, Fri-Sat 11AM-9PM, Sun 11AM-8PM"},
+        {"id": "g3", "name": "GameStop — Pine Island Rd", "address": "535 Pine Island Rd E, N Fort Myers, FL 33903", "phone": "(239) 656-2014", "hours": "Mon-Thu 12-7PM, Fri-Sat 11AM-9PM, Sun 12-8PM"},
     ],
 }
 
 COLORS = {"target": 0xCC0000, "walmart": 0x0071CE, "bestbuy": 0x003B64, "gamestop": 0xD4222A}
 EMOJIS = {"target": "🎯", "walmart": "🛒", "bestbuy": "💙", "gamestop": "🎮"}
 
-POKEMON_PRODUCTS = [
-    ("Booster Box", "pokemon booster box"),
-    ("Elite Trainer Box", "pokemon elite trainer box"),
-    ("Booster Bundle", "pokemon booster bundle"),
-    ("Tin / Collection", "pokemon tin collection"),
-    ("Blister Pack", "pokemon blister pack"),
+SET_FILTERS = [
+    ("🔥 Chaos Rising (May 2026)", "Chaos Rising"),
+    ("👻 Phantasmal Flames (Nov 2025)", "Phantasmal Flames"),
+    ("🃏 Destined Rivals (May 2025)", "Destined Rivals"),
+    ("✨ Prismatic Evolutions (Jan 2025)", "Prismatic Evolutions"),
+    ("⚡ Ascended Heroes / Pokemon Day", "Ascended"),
+    ("❄️ White Flare / Black Bolt", "Flare"),
+    ("📦 All Products", "All"),
 ]
-
-async def fetch_walmart_products(store_id):
-    results = []
-    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1", "Accept-Language": "en-US,en;q=0.9"}
-    async with aiohttp.ClientSession() as session:
-        for product_name, query in POKEMON_PRODUCTS:
-            url = f"https://www.walmart.com/search?q={query.replace(' ', '+')}&stores={store_id}"
-            try:
-                async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as r:
-                    status = "✅" if r.status == 200 else "❌"
-                    results.append(f"{status} [{product_name}]({url})")
-            except:
-                results.append(f"⚠️ {product_name} — timeout")
-    return results
-
-async def fetch_target_products(store_id):
-    results = []
-    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1", "Accept-Language": "en-US,en;q=0.9"}
-    async with aiohttp.ClientSession() as session:
-        for product_name, query in POKEMON_PRODUCTS:
-            url = f"https://www.target.com/s?searchTerm={query.replace(' ', '+')}&storeId={store_id}"
-            try:
-                async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as r:
-                    status = "✅" if r.status == 200 else "❌"
-                    results.append(f"{status} [{product_name}]({url})")
-            except:
-                results.append(f"⚠️ {product_name} — timeout")
-    return results
-
-async def fetch_bestbuy_products(store_id):
-    results = []
-    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"}
-    async with aiohttp.ClientSession() as session:
-        for product_name, query in POKEMON_PRODUCTS:
-            url = f"https://www.bestbuy.com/site/searchpage.jsp?st={query.replace(' ', '+')}&storeId={store_id}"
-            try:
-                async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as r:
-                    status = "✅" if r.status == 200 else "❌"
-                    results.append(f"{status} [{product_name}]({url})")
-            except:
-                results.append(f"⚠️ {product_name} — timeout")
-    return results
-
-async def fetch_gamestop_products():
-    results = []
-    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"}
-    async with aiohttp.ClientSession() as session:
-        for product_name, query in POKEMON_PRODUCTS:
-            url = f"https://www.gamestop.com/search/?q={query.replace(' ', '+')}"
-            try:
-                async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as r:
-                    status = "✅" if r.status == 200 else "❌"
-                    results.append(f"{status} [{product_name}]({url})")
-            except:
-                results.append(f"⚠️ {product_name} — timeout")
-    return results
 
 class ChainSelect(discord.ui.Select):
     def __init__(self):
@@ -106,62 +263,95 @@ class ChainSelect(discord.ui.Select):
             discord.SelectOption(label="💙 Best Buy (1 location)", value="bestbuy", emoji="💙"),
             discord.SelectOption(label="🎮 GameStop (3 locations)", value="gamestop", emoji="🎮"),
         ]
-        super().__init__(placeholder="1️⃣ First pick a store chain...", options=options)
+        super().__init__(placeholder="1️⃣ Pick a store chain...", options=options)
 
     async def callback(self, interaction: discord.Interaction):
         chain = self.values[0]
-        view = LocationView(chain)
         embed = discord.Embed(
-            title=f"{EMOJIS[chain]} Select a {chain.title()} Location",
-            description="Pick which Fort Myers location to check:",
+            title=f"{EMOJIS[chain]} Select a {chain.title()} Location — Fort Myers FL",
+            description="Choose which location to check:",
             color=COLORS[chain]
         )
         for s in STORES[chain]:
-            embed.add_field(name=s["name"], value=f"📍 {s['address']}\n📞 {s['phone']}\n🕐 {s['hours']}", inline=False)
-        await interaction.response.edit_message(embed=embed, view=view)
+            embed.add_field(
+                name=s["name"],
+                value=f"📍 {s['address']}\n📞 {s['phone']}\n🕐 {s['hours']}",
+                inline=False
+            )
+        await interaction.response.edit_message(embed=embed, view=LocationView(chain))
 
 class LocationSelect(discord.ui.Select):
     def __init__(self, chain):
         self.chain = chain
-        options = []
-        for s in STORES[chain]:
-            options.append(discord.SelectOption(label=s["name"], value=s["id"], description=s["address"][:50]))
-        super().__init__(placeholder="2️⃣ Now pick a specific location...", options=options)
+        options = [
+            discord.SelectOption(label=s["name"], value=s["id"], description=s["address"][:50])
+            for s in STORES[chain]
+        ]
+        super().__init__(placeholder="2️⃣ Pick a location...", options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        chain = self.chain
+        store = next(s for s in STORES[chain] if s["id"] == self.values[0])
+        embed = discord.Embed(
+            title=f"{EMOJIS[chain]} {store['name']}",
+            description="Now pick which Pokemon set to view:",
+            color=COLORS[chain]
+        )
+        embed.add_field(name="📍 Address", value=store["address"], inline=True)
+        embed.add_field(name="📞 Phone", value=store["phone"], inline=True)
+        embed.add_field(name="🕐 Hours", value=store["hours"], inline=False)
+        await interaction.response.edit_message(embed=embed, view=SetFilterView(chain, store))
+
+class SetFilterSelect(discord.ui.Select):
+    def __init__(self, chain, store):
+        self.chain = chain
+        self.store = store
+        options = [
+            discord.SelectOption(label=label, value=value)
+            for label, value in SET_FILTERS
+        ]
+        super().__init__(placeholder="3️⃣ Pick a set to view products...", options=options)
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        store_id_selected = self.values[0]
         chain = self.chain
-        store = next(s for s in STORES[chain] if s["id"] == store_id_selected)
+        store = self.store
+        filter_val = self.values[0]
 
-        embed = discord.Embed(
-            title=f"{EMOJIS[chain]} {store['name']}",
-            color=COLORS[chain]
-        )
-        embed.add_field(name="📍 Address", value=store["address"], inline=False)
-        embed.add_field(name="📞 Phone", value=store["phone"], inline=True)
-        embed.add_field(name="🕐 Hours", value=store["hours"], inline=True)
-
-        if chain == "walmart":
-            wid = store_id_selected.replace("w", "")
-            store_nums = {"1": "2924", "2": "3483", "3": "5162", "4": "3256"}
-            products = await fetch_walmart_products(store_nums.get(wid, "2924"))
-        elif chain == "target":
-            tid = store_id_selected.replace("t", "")
-            store_nums = {"1": "1267", "2": "2696", "3": "1268", "4": "2354"}
-            products = await fetch_target_products(store_nums.get(tid, "1267"))
-        elif chain == "bestbuy":
-            products = await fetch_bestbuy_products("268")
+        if filter_val == "All":
+            filtered = PRODUCTS
+        elif filter_val == "Ascended":
+            filtered = [p for p in PRODUCTS if "Ascended" in p["set"] or "Day 2026" in p["set"]]
+        elif filter_val == "Flare":
+            filtered = [p for p in PRODUCTS if "Flare" in p["set"] or "Bolt" in p["set"]]
         else:
-            products = await fetch_gamestop_products()
+            filtered = [p for p in PRODUCTS if filter_val in p["set"]]
 
-        embed.add_field(
-            name="🎴 Pokemon Products",
-            value="\n".join(products) if products else "Could not load products",
-            inline=False
-        )
-        embed.set_footer(text="✅ = Link works | Tap product name to search that store | Fort Myers FL")
-        await interaction.followup.send(embed=embed)
+        if not filtered:
+            await interaction.followup.send("No products found for that filter.", ephemeral=True)
+            return
+
+        for product in filtered:
+            price = product["prices"].get(chain, "N/A")
+            url = product["urls"].get(chain, "https://google.com")
+            embed = discord.Embed(
+                title=f"🎴 {product['name']}",
+                color=COLORS[chain]
+            )
+            embed.add_field(name="📦 Type", value=product["type"], inline=True)
+            embed.add_field(name="💰 Price at " + chain.title(), value=price, inline=True)
+            embed.add_field(name="📅 Released", value=product["release"], inline=True)
+            embed.add_field(name="📝 Details", value=product["description"], inline=False)
+            embed.add_field(name="🏪 Store", value=f"{store['name']}\n{store['address']}", inline=False)
+            embed.add_field(name="🔗 Check Stock", value=f"[Search {chain.title()} for this product]({url})", inline=False)
+            embed.set_thumbnail(url=product["image"])
+            embed.set_footer(text=f"Fort Myers FL | {store['hours']} | {store['phone']}")
+            await interaction.followup.send(embed=embed)
+
+class SetFilterView(discord.ui.View):
+    def __init__(self, chain, store):
+        super().__init__()
+        self.add_item(SetFilterSelect(chain, store))
 
 class LocationView(discord.ui.View):
     def __init__(self, chain):
@@ -173,22 +363,44 @@ class ChainView(discord.ui.View):
         super().__init__()
         self.add_item(ChainSelect())
 
-@bot.tree.command(name="pokemon", description="Check Pokemon stock at Fort Myers stores")
+@bot.tree.command(name="pokemon", description="Check Pokemon TCG products at Fort Myers stores")
 async def pokemon(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🎴 Pokemon Stock Checker — Fort Myers FL",
-        description="**Step 1:** Pick a store chain\n**Step 2:** Pick your location\n**Step 3:** See Pokemon products!",
+        description=(
+            "**How it works:**\n"
+            "**Step 1** — Pick a store chain\n"
+            "**Step 2** — Pick your Fort Myers location\n"
+            "**Step 3** — Pick a Pokemon set\n"
+            "**Result** — See every product with name, price, details & store link!\n\n"
+            "🔥 **Newest:** Mega Evolution — Chaos Rising (May 22, 2026)"
+        ),
         color=0xFFCC00
     )
-    embed.add_field(name="📦 Tracks", value="Booster Boxes • ETBs • Booster Bundles • Tins • Blister Packs", inline=False)
     embed.add_field(name="🏪 Stores", value="4 Targets • 4 Walmarts • 1 Best Buy • 3 GameStops", inline=False)
+    embed.add_field(name="📦 Sets Tracked", value="Chaos Rising • Phantasmal Flames • Destined Rivals • Prismatic Evolutions • Ascended Heroes • White Flare • Black Bolt", inline=False)
+    embed.set_footer(text="Prices updated May 2026 | GameStop charges more — always check Target/Walmart first!")
     await interaction.response.send_message(embed=embed, view=ChainView())
+
+@bot.tree.command(name="newset", description="Info about the newest Pokemon TCG set")
+async def newset(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="🔥 Newest Set: Mega Evolution — Chaos Rising",
+        description="Released **May 22, 2026**\n122 cards featuring **Mega Greninja ex** TCG debut!",
+        color=0xFF4500
+    )
+    embed.add_field(name="🃏 Featured Cards", value="Mega Greninja ex • Mega Floette ex • AZ SIR • Roxie SIR • Cinccino ex", inline=False)
+    embed.add_field(name="💰 MSRP Prices", value="Booster Box: **$160.99**\nElite Trainer Box: **$49.99**\nBooster Bundle: **$27.99**", inline=False)
+    embed.add_field(name="⚠️ GameStop Warning", value="GameStop charges $299.99 for Booster Box vs $160.99 MSRP everywhere else!", inline=False)
+    embed.add_field(name="🏪 Buy at MSRP from", value="Target • Walmart • Best Buy", inline=False)
+    embed.set_footer(text="Use /pokemon to check your local Fort Myers store!")
+    await interaction.response.send_message(embed=embed)
 
 @bot.tree.command(name="stores", description="List all Fort Myers Pokemon store locations")
 async def stores(interaction: discord.Interaction):
     embed = discord.Embed(title="📍 All Fort Myers Pokemon Store Locations", color=0xFFCC00)
     for chain, locations in STORES.items():
-        text = "\n".join([f"• {s['name']} — {s['address']}" for s in locations])
+        text = "\n".join([f"• **{s['name']}**\n  {s['address']} | {s['phone']}" for s in locations])
         embed.add_field(name=f"{EMOJIS[chain]} {chain.upper()}", value=text, inline=False)
     await interaction.response.send_message(embed=embed)
 
