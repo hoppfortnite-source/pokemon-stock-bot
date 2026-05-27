@@ -56,7 +56,7 @@ GAMESTOP_PRODUCTS = [
     {"name": "Chaos Rising Elite Trainer Box", "product_id": "20033749", "price": "$89.99 ⚠️", "set": "Mega Evolution — Chaos Rising", "type": "ETB (9 packs)"},
     {"name": "Chaos Rising Booster Bundle", "product_id": "20033748", "price": "$59.99 ⚠️", "set": "Mega Evolution — Chaos Rising", "type": "Booster Bundle (6 packs)"},
     {"name": "Chaos Rising Booster Box", "product_id": "20033747", "price": "$299.99 ⚠️", "set": "Mega Evolution — Chaos Rising", "type": "Booster Box (36 packs)"},
-    {"name": "Phantasmal Flames ETB", "product_id": "20012345", "price": "$89.99 ⚠️", "set": "Mega Evolution — Phantasmal Flames", "type": "ETB (9 packs)"},
+    {"name": "Phantasmal Flames ETB", "product_id": "20012345", "price": "$89.99 ⚠", "set": "Mega Evolution — Phantasmal Flames", "type": "ETB (9 packs)"},
     {"name": "Phantasmal Flames Bundle", "product_id": "20012346", "price": "$49.99 ⚠️", "set": "Mega Evolution — Phantasmal Flames", "type": "Booster Bundle (6 packs)"},
     {"name": "Destined Rivals ETB", "product_id": "20001234", "price": "$89.99 ⚠️", "set": "Scarlet & Violet — Destined Rivals", "type": "ETB (9 packs)"},
     {"name": "Destined Rivals Bundle", "product_id": "20001235", "price": "$49.99 ⚠️", "set": "Scarlet & Violet — Destined Rivals", "type": "Booster Bundle (6 packs)"},
@@ -125,11 +125,11 @@ async def check_target_pickup(store_id, tcin):
                                 return ("⚠️", f"Limited Stock! ({qty} left)")
                             else:
                                 return ("❌", "Out of Stock for Pickup")
-                    return ("❓", "Store data unavailable")
-                elif r.status == 404:
-                    return ("❌", "Not carried at this store")
+                    return ("❌", "Out of Stock at this store")
+                elif r.status in (404, 410):
+                    return ("❌", "Out of Stock / Not available")
                 else:
-                    return ("❓", f"API error {r.status}")
+                    return ("❓", f"Could not check (error {r.status})")
     except:
         return ("❓", "Check failed")
 
@@ -194,8 +194,8 @@ async def check_bestbuy_pickup(store_id, sku):
                     except (KeyError, TypeError):
                         pass
             product_url = f"https://www.bestbuy.com/site/searchpage.jsp?st=pokemon+cards&storeId={store_id}"
-            async with aiohttp.ClientSession() as session:
-                async with session.get(product_url, headers=MOBILE_HEADERS, timeout=aiohttp.ClientTimeout(total=10)) as r2:
+            async with aiohttp.ClientSession() as session2:
+                async with session2.get(product_url, headers=MOBILE_HEADERS, timeout=aiohttp.ClientTimeout(total=10)) as r2:
                     if r2.status == 200:
                         text = await r2.text()
                         if "add to cart" in text.lower():
