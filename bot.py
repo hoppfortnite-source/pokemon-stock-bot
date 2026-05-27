@@ -2,205 +2,201 @@ import discord
 from discord.ext import commands
 import aiohttp
 import os
-import json
+import re
 
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-FORT_MYERS_ZIP = "33901"
-
-TARGET_STORE_ID = "1267"
-WALMART_STORE_ID = "2924"
-
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
-    "Accept": "application/json",
-    "Accept-Language": "en-US,en;q=0.9",
+STORES = {
+    "target": [
+        {"id": "t1", "name": "Target — Dynasty Dr", "address": "9350 Dynasty Dr, Fort Myers, FL 33905", "phone": "(239) 265-9022", "hours": "Mon-Sat 8AM-10/11PM, Sun 8AM-10PM", "search_url": "https://www.target.com/s?searchTerm=pokemon+cards&storeId=1267"},
+        {"id": "t2", "name": "Target — S Tamiami Trl", "address": "13711 S Tamiami Trl, Fort Myers, FL 33912", "phone": "(239) 481-8860", "hours": "Mon-Sat 7AM-11PM, Sun 7AM-10PM", "search_url": "https://www.target.com/s?searchTerm=pokemon+cards&storeId=2696"},
+        {"id": "t3", "name": "Target — Gulf Center Dr ⭐", "address": "10000 Gulf Center Dr, Fort Myers, FL 33913", "phone": "(239) 432-2641", "hours": "Mon-Sat 7AM-11PM, Sun 7AM-10PM", "search_url": "https://www.target.com/s?searchTerm=pokemon+cards&storeId=1268"},
+        {"id": "t4", "name": "Target — San Carlos Blvd", "address": "15880 San Carlos Blvd, Fort Myers, FL 33908", "phone": "(239) 265-9002", "hours": "Daily 7AM-10PM", "search_url": "https://www.target.com/s?searchTerm=pokemon+cards&storeId=2354"},
+    ],
+    "walmart": [
+        {"id": "w1", "name": "Walmart — Colonial Blvd", "address": "4770 Colonial Blvd, Fort Myers, FL 33966", "phone": "(239) 274-2920", "hours": "Daily 6AM-11PM", "search_url": "https://www.walmart.com/search?q=pokemon+cards&stores=2924"},
+        {"id": "w2", "name": "Walmart — Six Mile Cypress ⭐", "address": "14821 Six Mile Cypress Pkwy, Fort Myers, FL 33912", "phone": "(239) 437-1880", "hours": "Daily 6AM-11PM", "search_url": "https://www.walmart.com/search?q=pokemon+cards&stores=3483"},
+        {"id": "w3", "name": "Walmart — Pine Island Rd", "address": "545 Pine Island Rd, N Fort Myers, FL 33903", "phone": "(239) 997-9991", "hours": "Daily 6AM-11PM", "search_url": "https://www.walmart.com/search?q=pokemon+cards&stores=5162"},
+        {"id": "w4", "name": "Walmart — San Carlos Blvd", "address": "17105 San Carlos Blvd, Fort Myers Beach, FL 33931", "phone": "(239) 340-7074", "hours": "Daily 6AM-11PM", "search_url": "https://www.walmart.com/search?q=pokemon+cards&stores=3256"},
+    ],
+    "bestbuy": [
+        {"id": "bb1", "name": "Best Buy — S Cleveland Ave", "address": "5019 S Cleveland Ave, Fort Myers, FL 33907", "phone": "(239) 278-1298", "hours": "Mon-Sat 10AM-9PM, Sun 11AM-7PM", "search_url": "https://www.bestbuy.com/site/searchpage.jsp?st=pokemon+trading+cards&storeId=268"},
+    ],
+    "gamestop": [
+        {"id": "g1", "name": "GameStop — Edison Mall", "address": "4125 Cleveland Ave Ste 1495, Fort Myers, FL 33901", "phone": "(239) 337-9784", "hours": "Mon-Thu 11AM-7PM, Fri-Sat 10AM-8PM, Sun 12-6PM", "search_url": "https://www.gamestop.com/search/?q=pokemon+cards"},
+        {"id": "g2", "name": "GameStop — S Tamiami Trl ⭐", "address": "13711 S Tamiami Trl #4, Fort Myers, FL 33912", "phone": "(239) 432-9639", "hours": "Mon-Thu 11AM-8PM, Fri-Sat 11AM-9PM, Sun 11AM-8PM", "search_url": "https://www.gamestop.com/search/?q=pokemon+cards"},
+        {"id": "g3", "name": "GameStop — Pine Island Rd", "address": "535 Pine Island Rd E, N Fort Myers, FL 33903", "phone": "(239) 656-2014", "hours": "Mon-Thu 12-7PM, Fri-Sat 11AM-9PM, Sun 12-8PM", "search_url": "https://www.gamestop.com/search/?q=pokemon+cards"},
+    ],
 }
 
-async def get_target_stock():
+COLORS = {"target": 0xCC0000, "walmart": 0x0071CE, "bestbuy": 0x003B64, "gamestop": 0xD4222A}
+EMOJIS = {"target": "🎯", "walmart": "🛒", "bestbuy": "💙", "gamestop": "🎮"}
+
+POKEMON_PRODUCTS = [
+    ("Booster Box", "pokemon booster box"),
+    ("Elite Trainer Box", "pokemon elite trainer box"),
+    ("Booster Bundle", "pokemon booster bundle"),
+    ("Tin / Collection", "pokemon tin collection"),
+    ("Blister Pack", "pokemon blister pack"),
+]
+
+async def fetch_walmart_products(store_id):
     results = []
-    try:
-        async with aiohttp.ClientSession() as session:
-            url = (
-                f"https://redsky.target.com/redsky_aggregations/v1/web/plp_search_v2"
-                f"?key=9f36aeafbe60771e321a7cc95a78140772ab3e96"
-                f"&channel=WEB&count=24&default_purchasability_filter=true"
-                f"&fulfillment_test_mode=grocery_opu_team_member_experience"
-                f"&include_sponsored=true&keyword=pokemon+cards"
-                f"&offset=0&platform=desktop&pricing_store_id={TARGET_STORE_ID}"
-                f"&scheduled_delivery_store_id={TARGET_STORE_ID}"
-                f"&store_ids={TARGET_STORE_ID}&visitor_id=test&zip={FORT_MYERS_ZIP}"
-            )
-            async with session.get(url, headers=HEADERS, timeout=aiohttp.ClientTimeout(total=15)) as r:
-                if r.status == 200:
-                    data = await r.json()
-                    items = data.get("data", {}).get("search", {}).get("products", [])
-                    for item in items[:8]:
-                        try:
-                            title = item["item"]["product_description"]["title"]
-                            price = item["price"]["formatted_current_price"]
-                            availability = item.get("fulfillment", {}).get("store_options", [{}])
-                            in_stock = False
-                            for opt in availability:
-                                if opt.get("location_id") == TARGET_STORE_ID:
-                                    in_stock = opt.get("in_store_only", {}).get("availability_status") == "IN_STOCK"
-                            status = "✅" if in_stock else "⚠️"
-                            image = item["item"].get("enrichment", {}).get("images", {}).get("primary_image_url", "")
-                            results.append({
-                                "name": title,
-                                "price": price,
-                                "status": status,
-                                "image": image,
-                                "store": "Target"
-                            })
-                        except:
-                            continue
-    except Exception as e:
-        print(f"Target error: {e}")
+    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1", "Accept-Language": "en-US,en;q=0.9"}
+    async with aiohttp.ClientSession() as session:
+        for product_name, query in POKEMON_PRODUCTS:
+            url = f"https://www.walmart.com/search?q={query.replace(' ', '+')}&stores={store_id}"
+            try:
+                async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as r:
+                    status = "✅" if r.status == 200 else "❌"
+                    results.append(f"{status} [{product_name}]({url})")
+            except:
+                results.append(f"⚠️ {product_name} — timeout")
     return results
 
-async def get_walmart_stock():
+async def fetch_target_products(store_id):
     results = []
-    try:
-        async with aiohttp.ClientSession() as session:
-            url = (
-                f"https://www.walmart.com/search?q=pokemon+cards"
-                f"&stores={WALMART_STORE_ID}"
-            )
-            headers = {**HEADERS, "Accept": "text/html,application/xhtml+xml"}
-            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as r:
-                if r.status == 200:
-                    text = await r.text()
-                    start = text.find('"items":[')
-                    if start != -1:
-                        results.append({
-                            "name": "Pokemon Cards",
-                            "price": "See site",
-                            "status": "✅",
-                            "image": "",
-                            "store": "Walmart",
-                            "url": f"https://www.walmart.com/search?q=pokemon+cards&store={WALMART_STORE_ID}"
-                        })
-    except Exception as e:
-        print(f"Walmart error: {e}")
+    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1", "Accept-Language": "en-US,en;q=0.9"}
+    async with aiohttp.ClientSession() as session:
+        for product_name, query in POKEMON_PRODUCTS:
+            url = f"https://www.target.com/s?searchTerm={query.replace(' ', '+')}&storeId={store_id}"
+            try:
+                async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as r:
+                    status = "✅" if r.status == 200 else "❌"
+                    results.append(f"{status} [{product_name}]({url})")
+            except:
+                results.append(f"⚠️ {product_name} — timeout")
     return results
 
-async def get_bestbuy_stock():
+async def fetch_bestbuy_products(store_id):
     results = []
-    try:
-        async with aiohttp.ClientSession() as session:
-            url = (
-                f"https://api.bestbuy.com/v1/products"
-                f"((search=pokemon+cards)&storeId=268)"
-                f"?apiKey=YourBestBuyAPIKey&show=name,salePrice,inStoreAvailability,thumbnailImage"
-                f"&pageSize=8&format=json"
-            )
-            async with session.get(url, headers=HEADERS, timeout=aiohttp.ClientTimeout(total=15)) as r:
-                if r.status == 200:
-                    data = await r.json()
-                    for item in data.get("products", [])[:8]:
-                        status = "✅" if item.get("inStoreAvailability") else "❌"
-                        results.append({
-                            "name": item.get("name", "Unknown"),
-                            "price": f"${item.get('salePrice', '?')}",
-                            "status": status,
-                            "image": item.get("thumbnailImage", ""),
-                            "store": "Best Buy"
-                        })
-    except Exception as e:
-        print(f"Best Buy error: {e}")
+    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"}
+    async with aiohttp.ClientSession() as session:
+        for product_name, query in POKEMON_PRODUCTS:
+            url = f"https://www.bestbuy.com/site/searchpage.jsp?st={query.replace(' ', '+')}&storeId={store_id}"
+            try:
+                async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as r:
+                    status = "✅" if r.status == 200 else "❌"
+                    results.append(f"{status} [{product_name}]({url})")
+            except:
+                results.append(f"⚠️ {product_name} — timeout")
     return results
 
-def build_embed(store_name, results, color):
-    embed = discord.Embed(
-        title=f"🎴 {store_name} Pokemon Stock — Fort Myers FL",
-        color=color
-    )
-    if not results:
-        embed.description = "❌ Could not retrieve stock data right now. Try the store link directly."
-        return embed
+async def fetch_gamestop_products():
+    results = []
+    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"}
+    async with aiohttp.ClientSession() as session:
+        for product_name, query in POKEMON_PRODUCTS:
+            url = f"https://www.gamestop.com/search/?q={query.replace(' ', '+')}"
+            try:
+                async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as r:
+                    status = "✅" if r.status == 200 else "❌"
+                    results.append(f"{status} [{product_name}]({url})")
+            except:
+                results.append(f"⚠️ {product_name} — timeout")
+    return results
 
-    for item in results[:6]:
-        embed.add_field(
-            name=f"{item['status']} {item['name'][:50]}",
-            value=f"💰 {item.get('price', 'N/A')}",
-            inline=False
-        )
-
-    if results and results[0].get("image"):
-        embed.set_thumbnail(url=results[0]["image"])
-
-    return embed
-
-class StoreSelect(discord.ui.Select):
+class ChainSelect(discord.ui.Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="Target — Fort Myers", value="target", emoji="🎯"),
-            discord.SelectOption(label="Walmart — Fort Myers", value="walmart", emoji="🛒"),
-            discord.SelectOption(label="Best Buy — Fort Myers", value="bestbuy", emoji="💙"),
-            discord.SelectOption(label="All Stores", value="all", emoji="🔍"),
+            discord.SelectOption(label="🎯 Target (4 locations)", value="target", emoji="🎯"),
+            discord.SelectOption(label="🛒 Walmart (4 locations)", value="walmart", emoji="🛒"),
+            discord.SelectOption(label="💙 Best Buy (1 location)", value="bestbuy", emoji="💙"),
+            discord.SelectOption(label="🎮 GameStop (3 locations)", value="gamestop", emoji="🎮"),
         ]
-        super().__init__(placeholder="Pick a store to check stock...", options=options)
+        super().__init__(placeholder="1️⃣ First pick a store chain...", options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        chain = self.values[0]
+        view = LocationView(chain)
+        embed = discord.Embed(
+            title=f"{EMOJIS[chain]} Select a {chain.title()} Location",
+            description="Pick which Fort Myers location to check:",
+            color=COLORS[chain]
+        )
+        for s in STORES[chain]:
+            embed.add_field(name=s["name"], value=f"📍 {s['address']}\n📞 {s['phone']}\n🕐 {s['hours']}", inline=False)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+class LocationSelect(discord.ui.Select):
+    def __init__(self, chain):
+        self.chain = chain
+        options = []
+        for s in STORES[chain]:
+            options.append(discord.SelectOption(label=s["name"], value=s["id"], description=s["address"][:50]))
+        super().__init__(placeholder="2️⃣ Now pick a specific location...", options=options)
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        store = self.values[0]
+        store_id_selected = self.values[0]
+        chain = self.chain
+        store = next(s for s in STORES[chain] if s["id"] == store_id_selected)
 
-        embeds = []
-        if store in ("target", "all"):
-            results = await get_target_stock()
-            embeds.append(build_embed("🎯 Target", results, 0xCC0000))
-        if store in ("walmart", "all"):
-            results = await get_walmart_stock()
-            embeds.append(build_embed("🛒 Walmart", results, 0x0071CE))
-        if store in ("bestbuy", "all"):
-            results = await get_bestbuy_stock()
-            embeds.append(build_embed("💙 Best Buy", results, 0x003B64))
+        embed = discord.Embed(
+            title=f"{EMOJIS[chain]} {store['name']}",
+            color=COLORS[chain]
+        )
+        embed.add_field(name="📍 Address", value=store["address"], inline=False)
+        embed.add_field(name="📞 Phone", value=store["phone"], inline=True)
+        embed.add_field(name="🕐 Hours", value=store["hours"], inline=True)
 
-        for embed in embeds[:3]:
-            embed.set_footer(text="Fort Myers, FL 33901 | Stock updates each time you check")
-            await interaction.followup.send(embed=embed)
+        if chain == "walmart":
+            wid = store_id_selected.replace("w", "")
+            store_nums = {"1": "2924", "2": "3483", "3": "5162", "4": "3256"}
+            products = await fetch_walmart_products(store_nums.get(wid, "2924"))
+        elif chain == "target":
+            tid = store_id_selected.replace("t", "")
+            store_nums = {"1": "1267", "2": "2696", "3": "1268", "4": "2354"}
+            products = await fetch_target_products(store_nums.get(tid, "1267"))
+        elif chain == "bestbuy":
+            products = await fetch_bestbuy_products("268")
+        else:
+            products = await fetch_gamestop_products()
 
-class StoreView(discord.ui.View):
+        embed.add_field(
+            name="🎴 Pokemon Products",
+            value="\n".join(products) if products else "Could not load products",
+            inline=False
+        )
+        embed.set_footer(text="✅ = Link works | Tap product name to search that store | Fort Myers FL")
+        await interaction.followup.send(embed=embed)
+
+class LocationView(discord.ui.View):
+    def __init__(self, chain):
+        super().__init__()
+        self.add_item(LocationSelect(chain))
+
+class ChainView(discord.ui.View):
     def __init__(self):
         super().__init__()
-        self.add_item(StoreSelect())
+        self.add_item(ChainSelect())
 
-@bot.tree.command(name="pokemon", description="Check real Pokemon stock at Fort Myers stores")
+@bot.tree.command(name="pokemon", description="Check Pokemon stock at Fort Myers stores")
 async def pokemon(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🎴 Pokemon Stock Checker — Fort Myers FL",
-        description="Select a store to see **real current stock** of Pokemon products!",
+        description="**Step 1:** Pick a store chain\n**Step 2:** Pick your location\n**Step 3:** See Pokemon products!",
         color=0xFFCC00
     )
-    embed.add_field(
-        name="📦 Checking for",
-        value="Booster Boxes • Elite Trainer Boxes • Booster Bundles • Tins & Collections",
-        inline=False
-    )
-    await interaction.response.send_message(embed=embed, view=StoreView())
+    embed.add_field(name="📦 Tracks", value="Booster Boxes • ETBs • Booster Bundles • Tins • Blister Packs", inline=False)
+    embed.add_field(name="🏪 Stores", value="4 Targets • 4 Walmarts • 1 Best Buy • 3 GameStops", inline=False)
+    await interaction.response.send_message(embed=embed, view=ChainView())
 
-@bot.tree.command(name="checkall", description="Check all Fort Myers stores for Pokemon stock")
-async def checkall(interaction: discord.Interaction):
-    await interaction.response.defer()
-    stores = [
-        ("🎯 Target", get_target_stock, 0xCC0000),
-        ("🛒 Walmart", get_walmart_stock, 0x0071CE),
-        ("💙 Best Buy", get_bestbuy_stock, 0x003B64),
-    ]
-    for store_name, fetch_fn, color in stores:
-        results = await fetch_fn()
-        embed = build_embed(store_name, results, color)
-        embed.set_footer(text="Fort Myers, FL 33901")
-        await interaction.followup.send(embed=embed)
+@bot.tree.command(name="stores", description="List all Fort Myers Pokemon store locations")
+async def stores(interaction: discord.Interaction):
+    embed = discord.Embed(title="📍 All Fort Myers Pokemon Store Locations", color=0xFFCC00)
+    for chain, locations in STORES.items():
+        text = "\n".join([f"• {s['name']} — {s['address']}" for s in locations])
+        embed.add_field(name=f"{EMOJIS[chain]} {chain.upper()}", value=text, inline=False)
+    await interaction.response.send_message(embed=embed)
 
 @bot.event
 async def on_ready():
     print(f"Bot ready as {bot.user}")
     await bot.tree.sync()
-    print("Slash commands synced!")
+    print("Synced!")
 
 TOKEN = os.environ.get('DISCORD_TOKEN')
 bot.run(TOKEN)
