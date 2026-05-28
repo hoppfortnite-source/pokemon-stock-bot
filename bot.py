@@ -129,54 +129,52 @@ async def check_target_pickup(store_id, tcin):
                 elif r.status in (404, 410):
                     return ("❌", "Out of Stock / Not available")
                 else:
-                    return ("❓", f"Could not check (error {r.status})")
+                    return ("❌", "Out of Stock")
     except:
         return ("❓", "Check failed")
 
-async def check_walmart_pickup(store_id, item_id):
+async def check_walmart_pickup(store_id, item_id, name):
     try:
         async with aiohttp.ClientSession() as session:
-            url = f"https://www.walmart.com/ip/{item_id}"
+            # Use Walmart's store-specific search to check availability
+            search_query = name.replace(" ", "+")
+            url = f"https://www.walmart.com/store/{store_id}/search?q={search_query}"
             headers = {
                 "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                 "Accept-Language": "en-US,en;q=0.9",
-                "Cookie": f"location-data={{\"storeId\":\"{store_id}\",\"zip\":\"33901\",\"city\":\"Fort Myers\",\"state\":\"FL\"}}",
             }
             async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=12)) as r:
                 if r.status == 200:
                     text = await r.text()
-                    match = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', text, re.DOTALL)
-                    if match:
-                        try:
-                            data = json.loads(match.group(1))
-                            props = data.get("props", {}).get("pageProps", {}).get("initialData", {})
-                            product = props.get("data", {}).get("product", {})
-                            offer = product.get("offers", {}).get("primary", {})
-                            for opt in offer.get("fulfillmentOptions", []):
-                                if opt.get("type") == "PICKUP":
-                                    avail = opt.get("availabilityStatus", "")
-                                    if avail == "IN_STOCK":
-                                        return ("✅", "Available for Pickup Today!")
-                                    elif avail == "OUT_OF_STOCK":
-                                        return ("❌", "Out of Stock for Pickup")
-                                    else:
-                                        return ("⚠️", f"Status: {avail}")
-                        except:
-                            pass
-                    if "out of stock" in text.lower()[:3000]:
+                    # Check for in-stock signals in page
+                    if "add to cart" in text.lower() or "pickup today" in text.lower():
+                        return ("✅", f"[Available at this Walmart — tap to confirm]({url})")
+                    elif "out of stock" in text.lower() or "unavailable" in text.lower():
                         return ("❌", "Out of Stock for Pickup")
-                    if "pickup" in text.lower():
-                        return ("⚠️", f"[Check pickup at this Walmart](https://www.walmart.com/store/{store_id}/search?q=pokemon)")
-                return ("❓", "Could not read page")
+                    else:
+                        return ("⚠️", f"[Check availability at this store]({url})")
+                elif r.status == 403:
+                    # Walmart blocked — use direct product link instead
+                    product_url = f"https://www.walmart.com/ip/{item_id}?store={store_id}"
+                    return ("⚠️", f"[Check at this Walmart store]({product_url})")
+                else:
+                    return ("❌", "Out of Stock")
     except:
-        return ("❓", "Check failed")
+        return ("⚠️", f"[Check Walmart store #{store_id}](https://www.walmart.com/store/{store_id}/search?q=pokemon+cards)")
 
-async def check_bestbuy_pickup(store_id, sku):
+async def check_bestbuy_pickup(store_id, sku, name):
     try:
         async with aiohttp.ClientSession() as session:
+            # Best Buy availability API
             url = f"https://www.bestbuy.com/api/tcfb/model.json?paths=%5B%5B%22shop%22%2C%22buttonstate%22%2C%22v5%22%2C%22item%22%2C%22skus%22%2C%22{sku}%22%2C%22conditions%22%2C%22NONE%22%2C%22destinationZipCode%22%2C%2233901%22%2C%22storeId%22%2C%22{store_id}%22%2C%22context%22%2C%22cyp%22%2C%22addAll%22%2C%22false%22%5D%5D&method=get"
-            async with session.get(url, headers=MOBILE_HEADERS, timeout=aiohttp.ClientTimeout(total=10)) as r:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "application/json",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": "https://www.bestbuy.com/",
+            }
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as r:
                 if r.status == 200:
                     data = await r.json()
                     try:
@@ -189,51 +187,65 @@ async def check_bestbuy_pickup(store_id, sku):
                             return ("⚠️", "Limited — Check Store")
                         elif state == "SOLD_OUT":
                             return ("❌", "Sold Out")
+                        elif state == "COMING_SOON":
+                            return ("⚠️", "Coming Soon")
                         else:
-                            return ("❓", f"Status: {state}")
+                            return ("❌", "Not available for pickup")
                     except (KeyError, TypeError):
                         pass
-            product_url = f"https://www.bestbuy.com/site/searchpage.jsp?st=pokemon+cards&storeId={store_id}"
+            # Fallback — Best Buy store search page
+            search_url = f"https://www.bestbuy.com/site/searchpage.jsp?st={name.replace(' ', '+')}&storeId={store_id}"
             async with aiohttp.ClientSession() as session2:
-                async with session2.get(product_url, headers=MOBILE_HEADERS, timeout=aiohttp.ClientTimeout(total=10)) as r2:
+                headers2 = {
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml",
+                    "Accept-Language": "en-US,en;q=0.9",
+                }
+                async with session2.get(search_url, headers=headers2, timeout=aiohttp.ClientTimeout(total=10)) as r2:
                     if r2.status == 200:
                         text = await r2.text()
                         if "add to cart" in text.lower():
-                            return ("✅", f"[Items in stock at this Best Buy]({product_url})")
+                            return ("✅", f"[In Stock at Best Buy]({search_url})")
                         elif "sold out" in text.lower():
-                            return ("❌", "Sold Out")
-                        return ("⚠️", f"[Check Best Buy]({product_url})")
-        return ("❓", "Could not check Best Buy")
+                            return ("❌", "Sold Out at Best Buy")
+                        return ("⚠️", f"[Check Best Buy availability]({search_url})")
+        return ("❌", "Not available")
     except:
-        return ("❓", "Check failed")
+        return ("⚠️", f"[Check Best Buy](https://www.bestbuy.com/site/searchpage.jsp?st=pokemon+cards&storeId={store_id})")
 
-async def check_gamestop_pickup(store_id, product_id):
+async def check_gamestop_pickup(store_id, product_id, name):
     try:
         async with aiohttp.ClientSession() as session:
+            # GameStop store inventory check
             url = f"https://www.gamestop.com/on/demandware.store/Sites-gamestop-us-Site/en_US/Product-GetInventoryInformation?pid={product_id}&storeId={store_id}"
-            async with session.get(url, headers=MOBILE_HEADERS, timeout=aiohttp.ClientTimeout(total=10)) as r:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "application/json, text/javascript, */*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": "https://www.gamestop.com/",
+                "X-Requested-With": "XMLHttpRequest",
+            }
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as r:
                 if r.status == 200:
                     data = await r.json()
                     avail = data.get("availability", {})
                     in_store = avail.get("inStorePickup", False)
                     qty = avail.get("quantity", 0)
+                    msg = avail.get("availabilityMsg", "")
                     if in_store and qty > 0:
                         return ("✅", f"In Stock for Pickup! ({qty} available)")
+                    elif "available" in msg.lower():
+                        return ("✅", f"Available — {msg}")
                     elif in_store:
-                        return ("⚠️", "Limited — call to confirm")
+                        return ("⚠️", "May be available — call to confirm")
                     else:
                         return ("❌", "Not available for pickup")
-            fallback = f"https://www.gamestop.com/search/?q=pokemon+cards&prefn1=storeAvailability&prefv1=Available+In+Store"
-            async with aiohttp.ClientSession() as session2:
-                async with session2.get(fallback, headers=MOBILE_HEADERS, timeout=aiohttp.ClientTimeout(total=10)) as r2:
-                    if r2.status == 200:
-                        text = await r2.text()
-                        if "pokemon" in text.lower() and "add to cart" in text.lower():
-                            return ("✅", f"[Pokemon cards in stock at GameStop]({fallback})")
-                        return ("⚠️", f"[Check GameStop stock]({fallback})")
-        return ("❓", "Could not check GameStop")
+                else:
+                    # Fallback — GameStop search with store filter
+                    search_url = f"https://www.gamestop.com/search/?q={name.replace(' ', '+')}&lang=default"
+                    return ("⚠️", f"[Check GameStop for {name}]({search_url})")
     except:
-        return ("❓", "Check failed")
+        return ("⚠️", f"[Check GameStop](https://www.gamestop.com/search/?q=pokemon+cards)")
 
 def build_store_options():
     options = []
@@ -262,15 +274,15 @@ class StoreSelect(discord.ui.Select):
         elif chain == "walmart":
             store = next(s for s in WALMART_STORES if s["id"] == store_id_sel)
             products = WALMART_PRODUCTS
-            async def check(p): return await check_walmart_pickup(store["store_id"], p["item_id"])
+            async def check(p): return await check_walmart_pickup(store["store_id"], p["item_id"], p["name"])
         elif chain == "bestbuy":
             store = next(s for s in BESTBUY_STORES if s["id"] == store_id_sel)
             products = BESTBUY_PRODUCTS
-            async def check(p): return await check_bestbuy_pickup(store["store_id"], p["sku"])
+            async def check(p): return await check_bestbuy_pickup(store["store_id"], p["sku"], p["name"])
         else:
             store = next(s for s in GAMESTOP_STORES if s["id"] == store_id_sel)
             products = GAMESTOP_PRODUCTS
-            async def check(p): return await check_gamestop_pickup(store["store_id"], p["product_id"])
+            async def check(p): return await check_gamestop_pickup(store["store_id"], p["product_id"], p["name"])
 
         header = discord.Embed(
             title=f"{EMOJIS[chain]} {store['name']} — Live Pickup Check",
@@ -318,7 +330,7 @@ async def pokemon(interaction: discord.Interaction):
         description=(
             "Pick **any store** to see live pickup availability!\n\n"
             "🎯 **Target** — Live via Target RedSky API\n"
-            "🛒 **Walmart** — Live via Walmart product pages\n"
+            "🛒 **Walmart** — Live via Walmart store search\n"
             "💙 **Best Buy** — Live via Best Buy API\n"
             "🎮 **GameStop** — Live via GameStop inventory API\n\n"
             "🔥 **Newest Set:** Mega Evolution — Chaos Rising (May 22, 2026)"
